@@ -13,8 +13,8 @@ import { pool as dbPool } from "./db";
 
 // Try multiple filenames to support both development and production environments
 const POSSIBLE_CSV_PATHS = [
-  "bloqueos_fenix_2026_COMPLETO_1776886180096.csv",
   "bloqueos_fenix_2026_COMPLETO.csv",
+  "bloqueos_fenix_2026_COMPLETO_1776886180096.csv",
   "bloqueos_fenix_2026.csv",
 ].map((f) => path.join(process.cwd(), "attached_assets", f));
 
