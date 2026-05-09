@@ -1,0 +1,11 @@
+{
+  "install": {
+    "cmd": "npm install --legacy-peer-deps"
+  },
+  "build": {
+    "cmd": "npm run build"
+  },
+  "start": {
+    "cmd": "npm start"
+  }
+}

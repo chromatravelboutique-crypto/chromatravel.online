@@ -1,0 +1,152 @@
+Actúa como arquitecto senior full-stack, especialista en SEO y Google AdSense.
+
+Proyecto: ChromaTravel.online
+
+PROBLEMA ACTUAL
+
+El sitio presenta errores críticos:
+
+Neon Postgres endpoint deshabilitado
+
+Middleware falla (schema undefined)
+
+Contenido del blog depende de DB y no renderiza
+
+Esto impide indexación y aprobación de Google AdSense.
+
+OBJETIVO
+
+Dejar el blog 100% funcional, indexable y estable, eliminando dependencias innecesarias de base de datos para contenido editorial.
+
+ACCIONES OBLIGATORIAS
+1️⃣ DESACOPLAR EL BLOG DE LA BASE DE DATOS
+Pon eso en la primera fase prompt
+
+Listo. Aquí va la PRIMERA FASE del prompt, limpia, directa y enfocada solo en corregir el cagadero técnico.
+Esto es lo primero que Replit debe hacer antes de escribir una sola palabra del blog.
+
+Cópialo tal cual y pégalo en Replit.
+
+🧱 PROMPT — FASE 1
+Auditoría y Corrección Técnica Crítica (Bloqueante)
+
+Actúa como arquitecto senior full-stack, especialista en SEO técnico y Google AdSense.
+
+Proyecto: ChromaTravel.online
+
+CONTEXTO REAL (NO SUPONER, NO OMITIR)
+
+El proyecto presenta errores críticos de backend que están rompiendo el renderizado del blog:
+
+Error recurrente:
+
+Failed to check for database diff:
+The endpoint has been disabled.
+Enable it using Neon API and retry.
+
+
+Errores derivados:
+
+schema: undefined
+table: undefined
+column: undefined
+code: 'XX000'
+Brand middleware error
+
+
+Esto indica que:
+
+El sitio depende de Neon Postgres
+
+El endpoint está deshabilitado o mal configurado
+
+El middleware falla
+
+El contenido del blog NO se renderiza de forma estable
+
+Google y AdSense no pueden indexar contenido dinámico roto.
+
+OBJETIVO DE ESTA FASE (BLOQUEANTE)
+
+Corregir el sitio para que:
+
+El blog NO dependa de la base de datos
+
+El contenido editorial se renderice directamente en HTML
+
+Google pueda leer texto real sin JS ni DB
+
+ACCIONES OBLIGATORIAS (EN ORDEN)
+1️⃣ DESACOPLAR EL BLOG DE LA BASE DE DATOS
+
+Eliminar cualquier dependencia de Neon / Postgres para:
+
+Posts
+
+Categorías
+
+Páginas del blog
+
+El blog debe funcionar aunque NO exista base de datos
+
+2️⃣ CONVERTIR EL BLOG EN EDITORIAL ESTÁTICO
+
+Implementar una de estas opciones (elige la más simple):
+
+Markdown (/content/blog/*.md)
+
+JSON estático
+
+HTML renderizado en build time
+
+Reglas:
+
+Texto visible en el HTML final
+
+Nada cargado vía fetch
+
+Nada vía API
+
+3️⃣ DESACTIVAR O AISLAR MIDDLEWARE ROTO
+
+Desactivar Brand middleware si depende de DB
+
+No permitir que un error backend bloquee páginas públicas
+
+El blog debe renderizar aunque el backend falle
+
+4️⃣ VALIDACIÓN SEO TÉCNICA
+
+Verificar que:
+
+<h1>, <h2>, <p> existan en HTML
+
+El texto sea seleccionable (Ctrl + A)
+
+No haya páginas vacías
+
+5️⃣ RESULTADO ESPERADO (NO NEGOCIABLE)
+
+Blog visible
+
+Texto indexable
+
+Sin errores en logs
+
+Google puede rastrear sin problemas
+
+REGLAS
+
+No usar placeholders
+
+No ocultar errores
+
+No continuar a Fase 2 hasta que esta esté 100% resuelta
+
+Devuelve:
+
+Qué se corrigió
+
+Qué se eliminó
+
+Cómo quedó el renderizado del blog

@@ -1,0 +1,141 @@
+OBJETIVO GENERAL
+Dejar chromatravel.online y Fénix Traveler LISTOS PARA PRODUCCIÓN REAL,
+con monetización activa y evidencia funcional de generación de leads.
+
+NO agregar features nuevos.
+NO refactorizar innecesariamente.
+EJECUTAR, PROBAR, AUDITAR Y CERRAR.
+
+====================================================
+1) HOME — TARIFAS ESPECIALES (BLOQUEOS)
+====================================================
+
+- Reemplazar TEMPORALMENTE el motor de búsqueda de TBO en la HOME.
+- Usar exactamente el espacio visual donde hoy está el buscador TBO.
+
+- Mostrar una sección destacada llamada:
+
+  🔥 “Tarifas Especiales por Tiempo Limitado”
+
+- Datos visibles al público:
+  - Hotel
+  - Destino
+  - Fechas (check-in / check-out)
+  - Precio “Desde”
+  - Badge simple de disponibilidad
+
+- CTA obligatorio:
+  - “Consultar disponibilidad por WhatsApp”
+
+- Fuente de datos:
+  - Tabla de bloqueos activos (ya cargados, 625 registros)
+
+- REGLAS:
+  - NO exponer proveedor
+  - NO exponer notas internas
+  - NO exponer IDs internos
+
+====================================================
+2) LEADS Y RESERVAS — PRUEBAS OBLIGATORIAS
+====================================================
+
+EJECUTAR PRUEBAS REALES Y DOCUMENTADAS.
+
+CHROMA:
+- Confirmar que:
+  - Formularios generan leads
+  - Correos SÍ se envían
+  - Leads se guardan en base de datos
+
+- Entregar evidencia:
+  - Screenshot o log del email enviado
+  - Registro en BD (ID, timestamp)
+  - Endpoint utilizado
+
+FÉNIX:
+- Confirmar estado actual:
+  - Leads se guardan
+  - Correos AÚN NO se envían
+
+- Indicar claramente:
+  - Qué falta para activar correos
+  - Variables necesarias
+  - Riesgo si se activa ahora
+
+====================================================
+3) SEGURIDAD — CIERRE TOTAL (OBLIGATORIO)
+====================================================
+
+CORREGIR SIN ROMPER PRODUCCIÓN:
+
+- Eliminar o proteger completamente:
+  - /env-file.txt
+
+- Proteger con autenticación admin:
+  - /download-deploy
+  - /ecosystem.config.cjs
+
+- Sanitizar endpoint:
+  - /api/paquetes-bloqueos/:id
+  (filtrar proveedor, notas, campos internos)
+
+- Eliminar header:
+  - X-Powered-By
+
+- Agregar headers básicos de seguridad:
+  - X-Frame-Options
+  - X-Content-Type-Options
+  - Referrer-Policy
+  (sin introducir CSP compleja ni romper Ads)
+
+====================================================
+4) SEO, BLOG Y MONETIZACIÓN
+====================================================
+
+VERIFICAR (NO ELIMINAR CONTENIDO):
+
+- Sitemap incluye:
+  - /tarifas-especiales
+  - Blog
+- Blog indexable
+- Google Analytics GA4 activo
+- Meta Pixel activo
+- AdSense funcionando correctamente
+
+====================================================
+5) VALIDACIÓN FINAL
+====================================================
+
+CONFIRMAR:
+
+- Home sin errores
+- Tarifas Especiales visibles en HOME
+- Admin protegido
+- Leads capturándose
+- Correos funcionando en Chroma
+- Build limpio
+
+====================================================
+6) AUDITORÍA FINAL OBLIGATORIA
+====================================================
+
+ENTREGAR REPORTE FINAL CON:
+
+- Estado técnico
+- Estado de seguridad
+- Estado SEO
+- Estado monetización
+- PRUEBAS DE LEADS (logs, capturas, IDs)
+
+DIFERENCIA CLARA:
+- Chroma = OPERATIVO
+- Fénix = email pendiente (detallado)
+
+VEREDICTO FINAL OBLIGATORIO:
+👉 “LISTO PARA PRODUCCIÓN Y MONETIZACIÓN”
+o
+👉 “NO LISTO” (con lista corta de bloqueantes)
+
+NO OPINAR.
+NO PROPONER FEATURES.
+EJECUTAR, PROBAR Y CERRAR.

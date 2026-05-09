@@ -1,0 +1,61 @@
+Generar slugs amigables (lowercase, hyphens).
+
+PRIORIDADES EDITORIALES
+
+Barcelona y San Francisco: prioridad ALTA (destacado / score 10/9).
+
+Amsterdam y Sitges: prioridad MUY ALTA (score 10).
+
+Para cada destino, proveer 3 paquetes sugeridos (price tiers: Premium $3k+, Upper-Mid $1k–3k, Boutique <$1k) con short bullets de lo que incluyen.
+
+ENTREGABLES ADICIONALES
+
+/src/data/calendar-2026.json: array consolidado de todos los eventos Pride/Festivals encontrados con fields: destination_slug, event_name, start, end, url, verified(boolean).
+
+/src/data/og-prompts.json: mapping slug → image_prompt
+
+Incluir en cada MDX un campo lastChecked con fecha ISO de cuando se buscó la info.
+
+REGLAS DE TONO Y AUDIENCIA
+
+Tono: premium, inclusivo, directo. Evitar clichés estereotípicos.
+
+Audiencia: parejas y viajeros LGBT con alto poder adquisitivo.
+
+EJEMPLOS RÁPIDOS (incluir en el prompt del script para referencia)
+
+Puerto Vallarta Pride — source candidate: puerto-vallarta tourism site, playas, organizadores Pride PV
+
+Barcelona Pride — source candidate: circuit de Pride Barcelona, Ajuntament de Barcelona
+
+Amsterdam Pride — source candidate: amsterdampride.com
+
+Sitges Pride — site oficial Sitges Pride
+
+San Francisco Pride — sfpride.org
+
+Tel Aviv Pride — telavivpride.org.il
+
+Mykonos events — mykonos gay events / Mykonos Pride pages
+
+Berlin Pride (Christopher Street Day / CSD Berlin) — csd-berlin.de
+
+Buenos Aires Pride (Marcha del Orgullo / Pride BA) — gobierno Buenos Aires / pride BA
+
+INSTRUCCIONES TÉCNICAS PARA REPLIT SCRIPT
+
+Intentar fetch HTTP(s) con timeout 8s y parsear HTML para fechas (buscar patterns: YYYY, "June", "July", "Pride", "Festival", "Christopher Street Day", "CSD", "Pride Weekend").
+
+Guardar raw source URL y snippet (text) en event.sourceSnippet (first 300 chars) para auditoría.
+
+Log de operaciones: /logs/destinos-fetch.log con timestamp, slug, event, verified true/false, source.
+
+Output: crear/overwrite JSON y MDX files; no borrar otros archivos.
+
+Si se ejecuta en modo --dry-run, generar solo calendar-2026.json y logs sin escribir MDX.
+
+ENTREGA
+
+Subir archivos a repo en /src/data y /src/content/destinos.
+
+Imprimir al final un resumen corto (table) con: destino, #events found, #events verified, path JSON, path MDX.

@@ -1,0 +1,24 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies (installed fresh in Docker)
+node_modules
+
+# Build output (produced inside Docker)
+dist
+
+# Dev / editor artefacts
+.env*
+*.log
+.DS_Store
+.vscode
+.idea
+
+# Test / CI
+*.test.ts
+*.spec.ts
+coverage
+
+# Misc
+# attached_assets — needed for Vite build (image imports)

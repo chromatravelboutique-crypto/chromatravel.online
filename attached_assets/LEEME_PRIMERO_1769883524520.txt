@@ -1,0 +1,231 @@
+================================================================================
+  SISTEMA CRM + PROGRAMA DE LEALTAD + AUTOMATIZACIONES
+  FenixTraveler / ChromaTravel
+================================================================================
+
+📦 CONTENIDO DEL ZIP:
+
+✅ Sistema completo listo para implementar en Replit
+✅ Arquitectura completa documentada
+✅ 4 módulos "ALGO PRO" diseñados:
+   1. Importador masivo CSV/Excel
+   2. WhatsApp bot que vende (con IA Claude)
+   3. Programa de lealtad multi-nivel
+   4. 5 automatizaciones de marketing
+
+================================================================================
+🚀 IMPLEMENTACIÓN RÁPIDA (Opción 1 - Recomendada)
+================================================================================
+
+1. Descomprime el ZIP
+2. Abre Replit (replit.com)
+3. Crea nuevo proyecto Node.js
+4. Sube todos los archivos
+5. Abre Replit Agent (ícono de robot 🤖)
+6. Copia y pega el contenido COMPLETO de:
+   
+   📄 PROMPT_PARA_REPLIT.md
+
+7. Espera 15-30 minutos mientras Replit Agent implementa todo
+8. Configura variables de entorno (ver .env.example)
+9. Ejecuta:
+   npm run migrate
+   npm run seed
+   npm run dev
+
+¡LISTO! Sistema funcionando.
+
+================================================================================
+📚 DOCUMENTACIÓN INCLUIDA
+================================================================================
+
+📄 README.md
+   → Documentación completa del sistema
+   → Características, API, arquitectura
+   → Guía de usuario
+
+📄 PROMPT_PARA_REPLIT.md ⭐ IMPORTANTE
+   → Prompt COMPLETO para Replit Agent
+   → Especificaciones técnicas detalladas
+   → Implementación paso a paso
+   → Este es el archivo MÁS IMPORTANTE para implementar
+
+📄 INSTALACION_RAPIDA.md
+   → Guía de instalación manual
+   → Configuración de servicios externos
+   → Troubleshooting
+
+📄 STRUCTURE.md
+   → Explicación de la estructura del proyecto
+   → Flujos de datos
+   → Arquitectura
+
+📄 .env.example
+   → Variables de entorno necesarias
+   → Copiar a .env y completar
+
+================================================================================
+🎯 LOS 4 "ALGO PRO" INCLUIDOS
+================================================================================
+
+1️⃣ IMPORTADOR MASIVO CSV/EXCEL
+   ✅ Preview de 10 primeras filas
+   ✅ Mapeo visual de columnas
+   ✅ Validación de duplicados
+   ✅ Reporte detallado de errores
+   ✅ Plantillas descargables
+
+2️⃣ WHATSAPP QUE VENDE (con IA)
+   ✅ Bot conversacional con Claude AI
+   ✅ Detección automática de intenciones:
+      • Precio → Cotización automática
+      • Disponibilidad → Busca opciones
+      • Compra → Escala a agente
+   ✅ Creación automática de leads
+   ✅ Contexto conversacional persistente
+
+3️⃣ PROGRAMA DE LEALTAD
+   ✅ Número único de cliente (FT-000123)
+   ✅ 4 niveles: Bronce, Plata, Oro, Platino
+   ✅ Acumulación automática por compra
+   ✅ Dashboard visual tipo tarjeta
+   ✅ Beneficios por tier
+   ✅ Redención de puntos
+
+4️⃣ AUTOMATIZACIONES (5 tipos)
+   ✅ 🎂 Cumpleaños: cupón + puntos automático
+   ✅ 🧠 Leads fríos: seguimiento 3+ días sin respuesta
+   ✅ 💰 Winback: reactivar clientes 6+ meses inactivos
+   ✅ 🔔 Recordatorios: avisos 7 días antes de viaje
+   ✅ ⭐ Reseñas: solicitud 3 días post-viaje
+
+================================================================================
+🔧 SERVICIOS EXTERNOS NECESARIOS
+================================================================================
+
+OBLIGATORIOS:
+□ PostgreSQL (base de datos)
+  → Replit DB, Supabase, Railway, etc.
+
+□ Twilio (WhatsApp Business API)
+  → Crear cuenta en twilio.com
+  → Configurar sandbox de WhatsApp
+  → Obtener Account SID y Auth Token
+
+□ Anthropic (Claude AI)
+  → Crear cuenta en console.anthropic.com
+  → Generar API key
+
+OPCIONALES:
+□ Gmail SMTP (para emails)
+  → Configurar App Password
+
+================================================================================
+📊 BASE DE DATOS
+================================================================================
+
+Tablas creadas (13):
+✅ customers - Clientes con número único
+✅ customer_sequences - Generador de números
+✅ loyalty_tiers - Niveles (Bronce, Plata, Oro, Platino)
+✅ loyalty_accounts - Cuentas de lealtad
+✅ loyalty_transactions - Historial de puntos
+✅ loyalty_rules - Reglas de acumulación
+✅ campaigns - Campañas de marketing
+✅ campaign_logs - Logs de envíos
+✅ consents - Consentimientos GDPR
+✅ customer_segments - Segmentos guardados
+✅ discount_codes - Cupones generados
+
+Triggers automáticos (3):
+✅ Actualizar tier al cambiar puntos
+✅ Actualizar puntos al insertar transacción
+✅ Actualizar updated_at en modificaciones
+
+Funciones SQL (1):
+✅ generate_customer_number(brand_id) → "FT-000123"
+
+================================================================================
+🌐 API ENDPOINTS IMPLEMENTADOS
+================================================================================
+
+Customers:
+  POST   /api/v1/customers
+  GET    /api/v1/customers/:id
+  PUT    /api/v1/customers/:id
+
+Import:
+  GET    /api/v1/import/template/:format
+  POST   /api/v1/import/preview
+  POST   /api/v1/import/import
+
+Loyalty:
+  GET    /api/v1/loyalty/account/:customerId
+  GET    /api/v1/loyalty/transactions/:customerId
+  POST   /api/v1/loyalty/redeem
+
+Campaigns:
+  POST   /api/v1/campaigns
+  GET    /api/v1/campaigns
+  POST   /api/v1/campaigns/:id/execute
+
+Webhooks:
+  POST   /api/v1/webhooks/twilio/whatsapp
+
+================================================================================
+⏰ CRON JOBS CONFIGURADOS
+================================================================================
+
+Diario 09:00 → 🎂 Cumpleaños
+Cada 6 horas → 🧠 Seguimiento leads
+Lunes 10:00 → 💰 Winback
+Diario 08:00 → 🔔 Recordatorios
+Diario 18:00 → ⭐ Reseñas
+
+================================================================================
+✨ RESULTADO FINAL
+================================================================================
+
+Tendrás un sistema profesional con:
+
+✅ Gestión completa de clientes con número único
+✅ Importación masiva de bases de datos
+✅ WhatsApp bot inteligente que cierra ventas
+✅ Programa de lealtad que retiene clientes
+✅ 5 automatizaciones que trabajan 24/7
+✅ Campañas segmentadas sin herramientas externas
+✅ Control total de tus datos
+✅ Escalable para miles de clientes
+
+================================================================================
+🆘 SOPORTE
+================================================================================
+
+Si tienes dudas durante la implementación:
+
+1. Consulta PROMPT_PARA_REPLIT.md (tiene TODO el detalle)
+2. Revisa INSTALACION_RAPIDA.md (troubleshooting)
+3. Revisa STRUCTURE.md (arquitectura)
+4. Consulta README.md (funcionalidades)
+
+Nota: Este es un sistema diseñado para producción real, no un demo.
+Todas las especificaciones están listas para implementar.
+
+================================================================================
+🎯 PRÓXIMOS PASOS
+================================================================================
+
+1. Lee PROMPT_PARA_REPLIT.md completo
+2. Implementa con Replit Agent (opción fácil)
+   O instala manualmente (opción avanzada)
+3. Configura servicios externos (Twilio, Anthropic)
+4. Ejecuta migraciones y seeds
+5. Prueba cada módulo
+6. ¡Empieza a vender!
+
+================================================================================
+
+¡Éxito con tu implementación! 🚀
+
+FenixTraveler Team
+2025

@@ -1,0 +1,66 @@
+Actúa como desarrollador web senior. Integra Amazon Afiliados en el blog del proyecto Fénix Traveler utilizando el tracking ID *fenixtra-20* y despliega una sección/galería de productos "Recomendados para viajeros" con productos ad-hoc ya poblados. Entrego este encargo para implementarlo en un proyecto web estático/React hospedado en Replit y listo para exportar a Hostinger. No dejes placeholders ni archivos vacíos — entrega todo funcional.
+
+REQUISITOS FUNCIONALES
+1. Implementa una nueva sección en el blog llamada *"Amazon Afiliados — Recomendados"*. Debe aparecer en:
+   - página del blog principal (preview de 3 productos)
+   - página de cada artículo (sidebar o bloque inferior con 4 productos relacionados)
+   - una página /admin/products donde el administrador pueda añadir/eliminar productos afiliados (ASIN o URL).
+
+2. Integración con *fenixtra-20*:
+   - Todos los enlaces a Amazon deben llevar el parámetro tag=fenixtra-20.
+   - Usa el script oficial de Amazon Widgets (//z-na.amazon-adsystem.com/widgets/onejs?MarketPlace=US) para cargas enriquecidas donde sea posible.
+   - Además genera enlaces directos si el widget no es posible (ej.: https://www.amazon.com/dp/{ASIN}?tag=fenixtra-20).
+
+3. Productos ad-hoc ya poblados:
+   - Crea un set inicial de 8 productos (categorías: maletas, backpacks, adaptadores, powerbanks, travel pillows, neceser, cámara compacta, botellas térmicas).
+   - Para cada producto añade: título, imagen (usa imágenes libres o placeholders reemplazables por el cliente), breve descripción, precio orientativo (texto), enlace afiliado con tag=fenixtra-20, botón "Comprar en Amazon".
+   - Ejemplo de enlaces de búsqueda si no hay ASIN: https://www.amazon.com/s?k=travel+backpack&tag=fenixtra-20 — mostrar como resultado alternativo.
+
+4. Admin UI:
+   - Crear /admin/products (protegida por contraseña simple en front-end o por token env var).
+   - Permite: Añadir producto mediante ASIN o URL (el sistema extrae título e imagen automáticamente si es posible), editar título/descripcion/enlace, eliminar producto y marcar categoría.
+   - Guardar la lista en un JSON local (/data/affiliate-products.json) o en localStorage (documentar cómo cambiar a DB).
+
+5. Visual y UX:
+   - Galería responsive con cards: imagen, título, precio (si disponible), rating (opcional), botón afiliado.
+   - Botón de “Añadir a favoritos” (localStorage) para usuarios.
+   - Mostrar badge pequeño: “Afiliado” y texto legal breve: “Compras con afiliado ayudan a mantener Fénix Traveler”.
+   - Lazy-loading de imágenes y optimización para móvil.
+
+6. Tracking y privacidad:
+   - Asegura que los clicks afiliados se registren en consola (o en log simple) para pruebas.
+   - Incluye un banner de consentimiento de cookies (light) que permita bloquear la carga del widget de Amazon hasta que el usuario acepte (cumplimiento básico GDPR/privacidad).
+
+7. SEO y rendimiento:
+   - Productos renderizados server-side o en build-time si usas SSG; si usas React SPA, asegúrate de que las cards tengan rel="noopener noreferrer" y target="_blank" en enlaces.
+   - Añade metatags OpenGraph para la página de recomendaciones.
+
+8. Documentación y entrega:
+   - README.md con instrucciones para:
+     - Cómo añadir o editar productos desde /admin/products.
+     - Cómo reemplazar imágenes por las reales que subirá el cliente.
+     - Cómo cambiar el tag si se desea otro ID.
+     - Cómo desplegar en Hostinger (subir carpeta public_html).
+     - Cómo activar/insertar claves de OpenPay/Clip si se requiere mostrar productos con pagos directos en el futuro.
+   - Empaqueta todo en fenix_affiliates_blog.zip.
+
+IMPLEMENTACIÓN TÉCNICA (SUGERIDA)
+- Si el proyecto es estático: simple HTML/CSS/JS (vanilla) con /data/affiliate-products.json.
+- Si es React (preferible):
+  - Componente AffiliateGallery que lee affiliate-products.json y renderiza cards.
+  - Página admin con formulario para añadir ASIN/URL, que actualiza JSON (en Replit, actualizar archivos directamente o usar endpoint serverless).
+  - Usa fetch para consultar la API de Amazon si se dispone de credenciales; si no, usar widgets y enlaces directos.
+- No dependencias pesadas; si usas alguna librería (p.ej. axios, sweetalert) inclúyela y documenta.
+
+DETALLES que deben quedar en el código:
+- En footer o parte visible: "Afiliado Amazon (fenixtra-20)" con enlace a política de afiliados.
+- Todos los enlaces Amazon deben incluir ?tag=fenixtra-20 (o &tag=fenixtra-20 si ya hay querystring).
+- Si importas el script de widgets, cargarlo *después* del consentimiento de cookies (si no hay consentimiento, no cargar).
+
+ENTREGA ESPERADA
+- Carpeta con front-end listo y admin mínimo funcional.
+- affiliate-products.json con 8 productos de ejemplo poblados.
+- README claro para cambios y despliegue.
+- ZIP final fenix_affiliates_blog.zip.
+
+No quiero placeholders vacíos: cada producto de ejemplo debe tener título, descripción, imagen (stock), y enlace afiliado funcional (aunque sean enlaces de búsqueda con tag). Entrega todo en español.

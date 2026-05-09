@@ -1,0 +1,149 @@
+TAREA: Implementar en este repo un paquete SEO completo y entregable para "Chroma Travel Boutique" orientado a **luxury LGBT travel** (clientes con alto poder adquisitivo). El resultado debe dejar un sitio Next.js (SSR) con 10 landings monetizables, blog optimizado, assets y checklist técnico para producción.
+
+PRIORIDAD: SEO técnico + contenido de alto valor (landing pages para venta y lead gen). Entregar demo funcional en /out (static export o dev server).
+
+ENTREGABLES OBLIGATORIOS:
+1. Repo Next.js básico (Node 18+) con Tailwind y configuración para SSR/SSG.
+   - Comando inicial (ejecutar en Replit): 
+     npx create-next-app@latest chroma-seo --ts
+     cd chroma-seo
+     npm install -D tailwindcss postcss autoprefixer
+     npx tailwindcss init -p
+   - Estructura: /pages, /public, /src/components, /src/content, /src/data
+
+2. Archivo /src/data/seo-keywords.json con keywords foco y longtails (ver lista abajo).
+
+3. 10 LANDINGS SEO (carpeta /pages/landings) — cada landing debe:
+   - Ruta limpia: /landings/puerto-vallarta-luxury-gay-travel
+   - H1 claro con keyword principal
+   - Longitud 1200–1800 palabras optimizadas (incluye H2, H3, bullets, FAQ)
+   - Meta title (60 chars) y meta description (140–160 chars)
+   - Schema JSON-LD tipo TravelAgency + LocalBusiness + OfferCatalog cuando aplique
+   - CTA destacado: “Solicitar cotización VIP” + formulario de lead (name, email, presupuesto, travel dates)
+   - Tabla de “paquetes sugeridos” con price ranges y botón “Solicitar cotización”
+   - Testimonial section (3 fake but realistic reviews)
+
+   LISTA DE 10 LANDINGS (prioridad):
+   1. Puerto Vallarta Luxury Gay Travel (México)
+   2. Tulum & Riviera Maya Honeymoon LGBT (México)
+   3. Bodas Igualitarias en México — Paquetes Boutique
+   4. Playa del Carmen & Cancún Luxury LGBT Escapes
+   5. CDMX Queer Cultural & Luxury Tours
+   6. Mykonos Luxury Gay Beaches & Villas
+   7. Tel Aviv Luxury Pride Experience
+   8. Mykonos / Santorini Private Yacht VIP
+   9. Luxury Gay Cruises — Premium Routes 2025
+   10. Wellness & Retreats Queer — México (retreat packages)
+
+4. BLOG: carpeta /pages/blog con 20 posts ideados y 6 ya redactados (1200+ palabras cada uno) optimizados para SEO. Incluir posts de alto valor para buyers:  
+   - Ej: “Cómo planear una boda LGBT de lujo en México”  
+   - Ej: “Top 12 hoteles gay-friendly 5★ en México (2025)”
+
+5. KEYWORD LIST y ON-PAGE TEMPLATE:
+   - Crear /src/data/seo-keywords.json con:
+     - primary, secondary, intent (informational/transactional), suggested slug, search intent notes.
+   - Añadir plantilla de meta tags: /src/utils/seo.ts que genere meta + OG + Twitter + JSON-LD por página.
+
+6. TECHNICAL SEO (implementado):
+   - SSR/SSG usando Next.js getServerSideProps / getStaticProps según caso.
+   - sitemap.xml dinámico en /pages/api/sitemap.xml o generate during build.
+   - robots.txt (allow /, point to sitemap).
+   - canonical tags en cada landing.
+   - hreflang para es/en.
+   - structured data JSON-LD para TravelAgency, Hotel, Event, FAQ.
+   - image optimization: usar next/image con placeholder y sizes.
+   - performance: Lighthouse target > 90 mobile; critical CSS, preconnect Google Fonts.
+   - uso de compression (gz/brotli) en server config (documentar).
+   - implement search-console & GA4 tags placeholder env vars.
+
+7. CONTENT SEO RULES (aplicar en cada landing & blog):
+   - Títulos H1 únicos + keyword principal
+   - H2 con LSI + preguntas frecuentes (FAQ schema)
+   - Internal links: mínimo 3 internas por landing (a blog/otras landings)
+   - Outbound links: 1–2 a fuentes de autoridad (e.g., oficinas de turismo)
+   - Image alt text: incluir keyword o LSI
+   - URL slugs short & keyword-rich
+   - Readability: párrafos <= 3 líneas, bullets, tablas
+   - CTA sticky y formulario con UTM capture
+
+8. LEAD MAGNETS & CRO:
+   - Crear recurso descargable /public/guides/top-10-gay-luxury-hotels-mexico.pdf (placeholder)
+   - Pop-up/slide-in configurado en /src/components/LeadMagnet.tsx (email capture)
+   - Quiz: “Tu viaje VIP en 30s” (simple form that tags lead intent)
+
+9. BACKLINKS & OUTREACH (entregable: /src/data/outreach-templates.md):
+   - 10 medios y 15 influencers target (listados) + plantilla de outreach email para PR y colaboraciones (personalizable).
+   - Incluir subject lines para open rate alto.
+
+10. ADS & PAID STRATEGY (archivo /src/data/ads-plan.md):
+   - Segmentación recomendada para Google Ads & Meta Ads (demographics, interests, income proxies).
+   - 3 campaign copy variants and suggested landing per campaign.
+   - Remarketing funnel setup.
+
+11. ANALYTICS & MONITORING:
+   - Placeholder GA4 script (env var NEXT_PUBLIC_GA4_ID)
+   - Search Console verification meta template
+   - Healthcheck endpoints /api/health
+   - Setup guidance for Sentry (errors) and daily log rotation (documented)
+
+12. IMAGE & MEDIA SPECS:
+   - Hero images: 1600x900, WebP + fallback JPEG, max 300kb after optimization
+   - Thumbs: 800x450
+   - Mobile hero: 800x600
+   - Use descriptive filenames (e.g., puerto-vallarta-luxury-hotel-villa.webp)
+
+13. DEPLOY / CI:
+   - GitHub Actions workflow (build, lint, test, export static)
+   - README.md with one-click deploy instructions to Vercel and Docker instructions for VPS.
+
+14. ACCEPTANCE CRITERIA (tests manual/automatic):
+   - 10 landings live in dev server returning 200 and with unique meta titles.
+   - sitemap.xml lists landings and blog posts.
+   - Each landing contains SEO meta + JSON-LD FAQ schema.
+   - GA4 & Search Console verification placeholders present.
+   - Lighthouse mobile score >= 80 (document steps to reach 90).
+   - Lead capture works and stores leads in /data/leads.json (or mock CRM).
+
+KEYWORDS (ejemplo dentro /src/data/seo-keywords.json — rellenar más):
+- "luxury gay travel mexico" (transactional) → slug: /landings/luxury-gay-travel-mexico
+- "hoteles gay friendly lujo puerto vallarta" (transactional)
+- "bodas destinó gay méxico" (transactional)
+- "gay honeymoon tulum" (transactional)
+- "best gay beaches mexico" (informational)
+- "private gay tours mexico city" (transactional)
+
+OUTPUTS DE ARCHIVO A CREAR (lista mínima):
+- /src/data/seo-keywords.json
+- /src/data/landings.json (meta + brief + slug)
+- /src/content/landings/*.mdx (10 landings)
+- /src/content/blog/*.mdx (20 ideas, 6 drafts)
+- /src/components/SEOHead.tsx (meta generator)
+- /src/components/LeadForm.tsx
+- /pages/landings/[slug].tsx (dynamic renderer)
+- /pages/blog/[slug].tsx
+- /public/guides/top-10-gay-luxury-hotels-mexico.pdf (placeholder)
+- /public/og-images/*.png (OG templates)
+- /README_SEO.md (instrucciones para poner en producción)
+
+REQUERIMIENTOS ADICIONALES PARA EL DEV:
+- Usar la paleta Chroma y fuentes (Poppins + Inter).
+- Formularios deben guardar leads en /data/leads.json y mostrar admin mock en /pages/admin/leads (protegido con basic auth configurable via .env).
+- Mostrar ejemplos de schema JSON-LD inyectados en head.
+
+TIMELINE SUGERIDO (para el dev):
+- Día 1: scaffold Next.js, Tailwind, SEOHead, keywords JSON
+- Día 2–3: construir 5 landings + lead form + sitemap
+- Día 4–6: completar 10 landings + 6 blog posts redactados
+- Día 7: tests, CI, README y entrega
+
+NOTAS TÉCNICAS IMPORTANTES:
+- Priorizar SSR/SSG en landings para SEO.
+- Usar canonical y hreflang para es/en.
+- Implementar lazy-loading de imágenes y LCP optimization.
+- No indexar páginas de staging (robots meta).
+
+ENTREGA:
+- Subir todo al repo y dejar una URL de demo (Replit public URL o Vercel) funcionando.
+- Incluir README_SEO.md con checklist de lanzamiento (Search Console, sitemap submit, GA4, backups, SSL).
+
+FIN.

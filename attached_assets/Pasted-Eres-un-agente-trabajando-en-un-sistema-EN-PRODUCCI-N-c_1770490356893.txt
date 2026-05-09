@@ -1,0 +1,108 @@
+Eres un agente trabajando en un sistema EN PRODUCCIÓN con usuarios reales.
+No improvises. No refactorices. No “optimices” sin permiso.
+
+PROYECTO: CHROMA TRAVEL
+ESTADO: Seguridad auditada y aprobada
+OBJETIVO: Estabilizar producción, preparar monetización y dejar IA lista sin activarla.
+REGLA SUPREMA: NO romper lo que ya funciona.
+
+================================
+REGLAS OBLIGATORIAS
+================================
+1. NO modificar rutas existentes.
+2. NO cambiar lógica de auth, pagos o reservas.
+3. NO actualizar dependencias.
+4. NO mover ni renombrar archivos existentes.
+5. SOLO agregar archivos nuevos o configuraciones aisladas.
+6. Si algo requiere tocar código productivo, DETENTE y EXPLICA antes.
+
+================================
+TAREAS (EJECUTAR EN ESTE ORDEN)
+================================
+
+1) ENTORNO DE PRODUCCIÓN
+- Configurar:
+  NODE_ENV=production
+- Verificar:
+  - No se exponen stack traces
+  - Manejo de errores sigue funcionando
+- NO cambiar lógica de errores.
+
+--------------------------------
+
+2) DOMINIO WWW (CRÍTICO)
+Reparar https://www.chromatravel.online
+
+- Verificar DNS:
+  - www.chromatravel.online debe ser CNAME → chromatravel.online
+- Verificar SSL:
+  - Certificado válido para root y www
+- Probar acceso en:
+  - Chrome
+  - Safari
+  - Mobile
+
+Resultado esperado:
+✔ https://www.chromatravel.online carga sin advertencias.
+
+--------------------------------
+
+3) SISTEMA DE LEALTAD
+- Ejecutar o verificar:
+  POST /api/loyalty/initialize
+- Confirmar:
+  - Niveles cargados
+  - Reglas activas
+  - Endpoints devuelven JSON válido
+
+--------------------------------
+
+4) IA PREPARADA (NO ACTIVAR)
+Preparar soporte para Anthropic / OpenAI SIN usar tokens reales.
+
+- Implementar variable:
+  AI_PROVIDER=mock | openai | anthropic
+- Reglas:
+  - mock es el default
+  - NO llamadas reales
+  - Arquitectura desacoplada y reversible
+
+PROHIBIDO:
+- Agregar API keys reales
+- Activar respuestas automáticas
+
+--------------------------------
+
+5) ESTABILIDAD BÁSICA
+- Agregar paginación al endpoint de bloqueos:
+  ?page=&limit=
+- Cachear:
+  /api/admin/email/status
+- NO romper contratos existentes.
+
+================================
+REPORTE FINAL OBLIGATORIO
+================================
+Al finalizar, entregar:
+
+1. Lista de tareas completadas
+2. Riesgos detectados (si existen)
+3. Nada pendiente sin justificar
+4. Confirmación textual:
+   "El sistema está estable y listo para monetización"
+
+================================
+SI ALGO NO SE PUEDE HACER
+================================
+DETENTE y explica:
+- Archivo afectado
+- Riesgo
+- Impacto comercial
+- Espera aprobación
+
+================================
+FILOSOFÍA
+================================
+Velocidad con seguridad.
+Ingresos sin interrupciones.
+Cero humo.

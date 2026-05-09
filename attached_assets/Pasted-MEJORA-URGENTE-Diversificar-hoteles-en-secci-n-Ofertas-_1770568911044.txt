@@ -1,0 +1,88 @@
+MEJORA URGENTE: Diversificar hoteles en sección "Ofertas"
+
+PROBLEMA ACTUAL:
+Las 6 cards muestran el mismo hotel (Qualton Ixtapa) repetido. Esto da mala impresión al cliente.
+
+OBJETIVO:
+Mostrar VARIEDAD de destinos y hoteles, priorizando mezcla geográfica sobre precio más bajo.
+
+NUEVA LÓGICA DE SELECCIÓN:
+
+1. AGRUPAR todos los bloqueos disponibles por DESTINO:
+   - Ixtapa
+   - Puerto Vallarta
+   - Playa del Carmen / Riviera Maya
+   - Cancún
+   - Huatulco
+   - Mazatlán
+   - Europa
+   - Otros
+
+2. De CADA destino, seleccionar:
+   - El hotel MÁS ECONÓMICO (1 card)
+   - El hotel MÁS PREMIUM si hay diferencia significativa (opcional, 1 card adicional)
+
+3. PRIORIDAD de destinos a mostrar:
+   - Primero: Destinos con mayor demanda (Cancún, Playa del Carmen, Puerto Vallarta)
+   - Segundo: Destinos de playa (Ixtapa, Huatulco, Mazatlán)
+   - Tercero: Destinos especiales (Europa, Xcaret si existe)
+
+4. ORDENAR las 6 cards finales por PRECIO:
+   - De más caro a más barato
+   - O de más barato a más caro (tú decides)
+
+5. RESULTADO ESPERADO (ejemplo):
+   Card 1: Cancún - Ocean Riviera Paradise - $1,749
+   Card 2: Playa del Carmen - Allegro Playacar - $1,688
+   Card 3: Puerto Vallarta - Krystal Grand - $1,688
+   Card 4: Ixtapa - Qualton - $1,599
+   Card 5: Huatulco - Castillo Huatulco - $1,567
+   Card 6: Mazatlán - Pueblo Bonito - $1,924
+
+CÓDIGO DE EJEMPLO:
+```javascript
+// Agrupar por destino
+const bloqueosPorDestino = {};
+bloqueos.forEach(bloqueo => {
+  const destino = extraerDestino(bloqueo.hotel); // Ixtapa, Cancún, etc.
+  if (!bloqueosPorDestino[destino]) {
+    bloqueosPorDestino[destino] = [];
+  }
+  bloqueosPorDestino[destino].push(bloqueo);
+});
+
+// Seleccionar 1-2 por destino
+const seleccionados = [];
+Object.keys(bloqueosPorDestino).forEach(destino => {
+  const bloquesDestino = bloqueosPorDestino[destino]
+    .sort((a, b) => a.precio - b.precio); // Ordenar por precio
+  
+  // Tomar el más barato
+  seleccionados.push(bloquesDestino[0]);
+  
+  // Si hay diferencia >30% de precio, tomar también el más caro
+  if (bloquesDestino.length > 1) {
+    const masBarato = bloquesDestino[0].precio;
+    const masCaro = bloquesDestino[bloquesDestino.length - 1].precio;
+    if (masCaro > masBarato * 1.3) {
+      seleccionados.push(bloquesDestino[bloquesDestino.length - 1]);
+    }
+  }
+});
+
+// Ordenar todos por precio y tomar top 6
+const ofertasFinales = seleccionados
+  .sort((a, b) => a.precio - b.precio)
+  .slice(0, 6);
+```
+
+VALIDACIÓN:
+Después de aplicar los cambios, verifica que:
+- NO haya hoteles repetidos
+- Haya al menos 4 destinos diferentes
+- Los precios sean variados (no todos iguales)
+
+ARCHIVOS A MODIFICAR:
+Busca el código que genera las cards de "Ofertas" o "Tarifas Especiales" y aplica esta nueva lógica de selección.
+
+Muéstrame qué archivos modificaste cuando termines.

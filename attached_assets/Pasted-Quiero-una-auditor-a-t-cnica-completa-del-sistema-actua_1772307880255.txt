@@ -1,0 +1,169 @@
+Quiero una auditoría técnica completa del sistema actual de cotización y reserva.
+
+NO propongas mejoras.
+NO refactorices.
+NO agregues features.
+SOLO audita, ejecuta pruebas reales y entrega evidencia.
+
+====================================================
+
+UBICAR SISTEMA DE COTIZACIÓN
+
+Encuentra todos los archivos relacionados con:
+
+calculadora
+
+cotización
+
+reserva
+
+booking
+
+pricing
+
+bloqueos
+
+Identifica:
+
+Componente frontend
+
+Endpoint backend que procesa la acción
+
+Función que calcula precio
+
+Función que guarda datos
+
+Entrega:
+
+Rutas de archivos
+
+Endpoint exacto usado
+
+Método HTTP
+
+Payload que envía el frontend
+
+====================================================
+
+EJECUTAR PRUEBA REAL
+
+Simula una cotización completa como usuario real:
+
+Fechas reales
+
+Hotel real
+
+Datos de contacto reales de prueba
+
+Después verifica:
+
+A) ¿Se guarda algo en base de datos?
+
+Mostrar registro creado
+
+ID
+
+Timestamp
+
+Tabla usada
+
+B) ¿Se envía correo?
+
+Mostrar log SMTP
+
+Status de envío
+
+Proveedor usado (Resend, Sendgrid, SMTP, etc)
+
+C) ¿Se genera algún ID único de reserva o intento?
+
+Si algo falla:
+
+Mostrar error exacto
+
+Archivo donde ocurre
+
+Línea aproximada
+
+====================================================
+
+VALIDAR FLUJO COMPLETO
+
+Confirmar si al presionar:
+
+“Reservar” o “Consultar”
+
+ocurre:
+
+Solo cálculo frontend
+
+Guardado en BD
+
+Envío de email
+
+Llamada a proveedor externo
+
+Nada (solo simulación)
+
+====================================================
+
+VALIDAR PERSISTENCIA
+
+Revisar:
+
+Modelo o schema de BD
+
+Tabla usada
+
+Campos obligatorios
+
+Si hay validación server-side
+
+Si hay sanitización
+
+====================================================
+
+SEGURIDAD DEL ENDPOINT
+
+Verificar:
+
+Si el endpoint permite acceso público sin validación
+
+Si filtra campos internos
+
+Si expone proveedor o notas
+
+Si tiene rate limit
+
+====================================================
+
+REPORTE FINAL OBLIGATORIO
+
+Entregar:
+
+ESTADO DEL SISTEMA:
+
+¿Es calculadora visual o sistema real?
+
+¿Genera lead real?
+
+¿Envía correo?
+
+¿Guarda en BD?
+
+¿Tiene trazabilidad?
+
+CLASIFICACIÓN FINAL:
+
+👉 LISTO PARA PRODUCCIÓN
+o
+👉 NO LISTO
+
+Con lista corta de bloqueantes reales.
+
+NO OPINIÓN.
+SOLO HECHOS VERIFICADOS.
+
+====================================================
+
+Ejecuta ahora y entrega evidencia concreta.

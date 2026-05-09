@@ -1,0 +1,58 @@
+Objetivo: Implementar en chromatravel.online una sección visible y funcional llamada "Tarifas Especiales" para público general, que muestre los bloqueos actuales renombrados con lenguaje comercial y orientado al usuario final.
+
+Contexto:
+- Los "bloqueos" son registros internos de tarifas negociadas con hoteles, con fechas y precios específicos.
+- Actualmente están en base de datos y archivos CSV (aprox. 454 registros activos).
+- El motor de búsqueda TBO Holidays y Hotelbeds no están activos aún, por lo que esta sección debe suplir esa funcionalidad en la página de inicio.
+- La plataforma usa Node.js/Express backend y frontend clásico HTML/CSS/JS.
+
+Requerimientos:
+
+1. **Nombre Público:** "Tarifas Especiales"
+   - Reemplazar internamente o exponer al usuario final como este nombre.
+
+2. **Ubicación:** Página de inicio, integrada o inmediatamente debajo del motor de búsqueda actual.
+
+3. **Contenido a mostrar:** Para cada tarifa especial mostrar:
+   - Hotel
+   - Destino
+   - Fechas disponibles (check-in/check-out)
+   - Precio
+   - Estado/Disponibilidad
+
+4. **Copy y diseño textual:**
+   - Encabezado: "Tarifas Especiales — Solo por Tiempo Limitado"
+   - Subtítulo: "Hoteles seleccionados con tarifas negociadas exclusivas. Disponibilidad limitada, precios que no encontrarás en buscadores convencionales."
+   - Texto adicional (opcional): "Estas tarifas son el resultado de negociaciones directas con los hoteles. No están disponibles al público general. Consulta antes de que se agoten."
+
+5. **Llamadas a la acción (CTAs):**
+   - En cada tarjeta/oferta: botón "Consultar Disponibilidad"
+   - En la sección general: botón "Ver Todas las Ofertas"
+
+6. **Funcionalidad:**
+   - Mostrar listado paginado o con scroll de tarifas especiales activas.
+   - Cada "Consultar Disponibilidad" debe abrir formulario para capturar lead (nombre, contacto, interés) que alimenta el CRM con scoring.
+   - La sección debe mantenerse visible y prioritaria mientras no haya integraciones activas con motores TBO/Hotelbeds.
+   - Preparar para posible reubicación futura cuando motores estén activos.
+
+7. **Restricciones:**
+   - No modificar motores de búsqueda actuales.
+   - No eliminar ni modificar datos originales, solo exponerlos con nuevo nombre y enfoque UX.
+
+8. **Validaciones y pruebas:**
+   - Validar que la sección carga correctamente en todos los navegadores modernos.
+   - Confirmar que leads se guardan y se notifica al CRM.
+   - Probar que los precios y fechas coinciden con base de datos bloqueos.
+
+9. **Documentación:**
+   - Documentar en README o sistema interno el cambio, ubicación y lógica del renombre de "bloqueos" a "Tarifas Especiales".
+
+---
+
+Este cambio es clave para maximizar la conversión en la etapa actual de la plataforma.
+
+Confirma cuando comiences, avances y termines para revisión y despliegue.
+
+---
+
+Así el equipo podrá implementar con claridad la sección estratégica que mencionas. Si quieres, puedo ayudarte a redactar el texto del formulario lead o código ejemplo para frontend/backend.

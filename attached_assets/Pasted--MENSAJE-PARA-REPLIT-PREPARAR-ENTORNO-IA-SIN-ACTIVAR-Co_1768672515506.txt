@@ -1,0 +1,99 @@
+## MENSAJE PARA REPLIT – PREPARAR ENTORNO IA (SIN ACTIVAR)
+
+Contexto:
+Ya contamos con CRM y ERP operativos. La tarea NO es crear sistemas nuevos ni activar un bot de IA ahora.
+
+Objetivo:
+Dejar el sistema **IA-ready** para integrar en el futuro un bot con OpenAI o Anthropic **sin rehacer arquitectura**, **sin costos ahora** y **sin riesgos**.
+
+---
+
+### DECISIÓN TÉCNICA
+
+👉 Arquitectura preparada para IA, **bot desactivado**.
+
+---
+
+### 1️⃣ QUÉ SÍ DEBE QUEDAR PREPARADO
+
+* Crear un módulo/servicio separado llamado `ai_assistant` (inactivo)
+* Interfaces claras:
+
+  * Entrada: eventos del CRM (cliente, reserva, bloqueo, puntos, campañas)
+  * Salida: texto para WhatsApp / Email
+* Variables de entorno:
+
+  * `AI_PROVIDER` (openai | anthropic | none)
+  * `AI_API_KEY` (vacía por defecto)
+  * `AI_ENABLED=false`
+
+⚠️ Si `AI_ENABLED=false`, **no debe ejecutarse nada** relacionado con IA.
+
+---
+
+### 2️⃣ QUÉ NO SE DEBE HACER AHORA
+
+* NO llamadas a APIs de OpenAI o Anthropic
+* NO consumo de tokens
+* NO bots conversacionales activos
+* NO automatizaciones inteligentes en producción
+
+Solo preparación estructural.
+
+---
+
+### 3️⃣ CASOS DE USO FUTUROS (SOLO DOCUMENTADOS)
+
+Dejar documentado, **NO implementado**:
+
+* Respuestas automáticas en WhatsApp
+* Redacción inteligente de promociones
+* Felicitaciones personalizadas
+* Recomendación de bloqueos
+* Ajuste dinámico de puntos y campañas
+
+Nada activo, solo documentado.
+
+---
+
+### 4️⃣ VENTAJAS DE ESTE ENFOQUE
+
+* Cero costos ahora
+* Cero riesgos legales/datos
+* Sin dependencia de proveedor
+* Activación futura con un solo flag
+* Cambio de proveedor sin tocar el core
+
+---
+
+### 5️⃣ ENTREGABLE ESPERADO
+
+* Confirmación de arquitectura IA-ready
+* Módulo `ai_assistant` creado pero inactivo
+* Variables de entorno definidas
+* Diagrama simple de integración futura
+
+---
+
+### 6️⃣ REGLA DE ORO
+
+"Preparado para IA, pero controlado por humanos."
+
+Primero:
+
+* CRM sólido
+* Programa de lealtad funcionando
+* Venta de bloqueos prioritaria
+
+Después:
+
+* IA para escalar, no para complicar.
+
+---
+
+### CONCLUSIÓN
+
+✅ Dejar preparado
+❌ No activar aún
+
+Este punto es obligatorio y no negociable.

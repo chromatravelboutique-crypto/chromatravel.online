@@ -1,0 +1,119 @@
+OBJETIVO:
+Dejar la plataforma LISTA PARA PRODUCCIÓN REAL,
+con evidencia funcional de generación de leads y flujo comercial.
+
+====================================================
+1) HOME — TARIFAS ESPECIALES (BLOQUEOS)
+====================================================
+
+- Reemplazar TEMPORALMENTE el motor de búsqueda de TBO en la HOME.
+- Mostrar una sección destacada llamada:
+
+  🔥 “Tarifas Especiales por Tiempo Limitado”
+
+- Ubicación exacta:
+  - Página de inicio
+  - En el espacio visual donde hoy está el buscador TBO
+
+- Datos públicos visibles:
+  - Hotel
+  - Destino
+  - Fechas
+  - Precio “Desde”
+  - Badge simple de disponibilidad
+
+- CTA obligatorio:
+  - “Consultar disponibilidad por WhatsApp”
+
+- Fuente de datos:
+  - Tabla de bloqueos activos
+- NO exponer proveedor, notas internas ni IDs.
+
+====================================================
+2) LEADS Y RESERVAS — PRUEBAS OBLIGATORIAS
+====================================================
+
+- Ejecutar pruebas reales y documentadas:
+
+CHROMA:
+- Confirmar que:
+  - Formularios generan leads
+  - Correos SÍ se envían
+  - Leads se guardan en BD
+- Enviar evidencia:
+  - Screenshot o log de email enviado
+  - Registro en base de datos
+  - Timestamp y endpoint usado
+
+FÉNIX:
+- Confirmar estado actual:
+  - Leads se guardan
+  - Correos AÚN NO se envían
+- Indicar exactamente:
+  - Qué falta para activar correos
+  - Variables necesarias
+  - Riesgo si se activa ahora
+
+====================================================
+3) SEGURIDAD — CIERRE TOTAL
+====================================================
+
+OBLIGATORIO:
+
+- Eliminar o proteger:
+  - /env-file.txt
+- Proteger con auth admin:
+  - /download-deploy
+  - /ecosystem.config.cjs
+- Sanitizar:
+  - /api/paquetes-bloqueos/:id
+- Eliminar:
+  - X-Powered-By header
+- Agregar headers básicos de seguridad
+  (sin romper producción)
+
+====================================================
+4) SEO, BLOG Y MONETIZACIÓN
+====================================================
+
+- Verificar:
+  - Sitemap incluye tarifas-especiales
+  - Blog indexable
+  - GA4 activo
+  - Meta Pixel activo
+  - AdSense funcionando
+- NO eliminar contenido existente.
+
+====================================================
+5) VALIDACIÓN FINAL
+====================================================
+
+- Home sin errores
+- Tarifas Especiales visibles
+- Admin protegido
+- Leads capturándose
+- Build limpio
+
+====================================================
+6) AUDITORÍA FINAL OBLIGATORIA
+====================================================
+
+Entregar REPORTE FINAL con:
+
+- Estado técnico
+- Estado de seguridad
+- Estado SEO
+- Estado monetización
+- PRUEBAS DE LEADS (logs, capturas, IDs)
+- Diferencia clara:
+  - Chroma = operativo
+  - Fénix = pendiente email
+
+VEREDICTO FINAL OBLIGATORIO:
+👉 “LISTO PARA PRODUCCIÓN Y MONETIZACIÓN”
+o
+👉 “NO LISTO” (con lista corta de bloqueantes)
+
+NO agregar features.
+NO refactorizar innecesariamente.
+EJECUTAR, PROBAR Y CERRAR.

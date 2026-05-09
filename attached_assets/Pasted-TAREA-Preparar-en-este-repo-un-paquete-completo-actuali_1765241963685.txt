@@ -1,0 +1,141 @@
+TAREA: Preparar en este repo un paquete completo, actualizado y listo para desplegar en un VPS Hostinger que corre OpenLiteSpeed (ya con fenixtravel en el mismo VPS). El output debe contener builds listos, configuraciones, scripts y documentación para desplegar Chroma Travel Boutique sin afectar la web existente. Generar archivos, instrucciones y un ZIP de despliegue.
+
+PRIORIDAD: Produce artefactos que funcionen con OpenLiteSpeed y alternativa Docker (docker-compose) para quien prefiera contenedores. Todo en español y con comandos exactos para copiar/pegar.
+
+SALIDA OBLIGATORIA (archivos a crear en el repo)
+
+1. /dist/                -> build estático o producción (si Next.js: export estático o .next build + start scripts)
+2. /deploy/chroma-deploy.zip -> zip listo para copiar al VPS y descomprimir en /var/www/chroma
+3. /deploy/provision.sh  -> script de provisionamiento (instala dependencias mínimas: unzip, certbot, pm2, node via apt or nvm, docker optional)
+4. /deploy/deploy.sh     -> script de despliegue (descomprime zip, instala deps si aplica, build si aplica, pm2 start o docker compose up)
+5. /deploy/docker-compose.yml -> alternativa containerizada (app, postgres, redis, traefik optional) con variables env referenciadas en .env
+6. /deploy/ols-vhost.conf.sample -> archivo de configuración ejemplo para Virtual Host OpenLiteSpeed (paths y contextos), listo para copiar a /usr/local/lsws/conf/vhosts/chroma/vhconf.conf
+7. /deploy/ols-listener-mapping.txt -> pasos exactos para mapear listener 80/443 a Virtual Host en panel OLS (click by click)
+8. /deploy/env.example    -> plantilla con todas las variables env necesarias (DB, STRIPE/OPENPAY, SMTP, KEYS)
+9. /deploy/certbot-commands.txt -> comandos seguros para obtener cert con certbot webroot usando /var/www/chroma/public
+10. /deploy/backup_chroma.sh -> script de backup (pg_dump + rsync public) y cron entry (keep 7 days)
+11. /deploy/healthcheck_chroma.sh -> healthcheck simple (curl [https://chromatravel.DOMAIN/api/health](https://chromatravel.DOMAIN/api/health)) y ejemplo de cron cada 5 min con mail/telegram instructions
+12. /deploy/nginx-redirects.sample -> reglas sugeridas si usas nginx proxy in front of OLS (opcional)
+13. /docs/DEPLOY_HOSTINGER.md -> guía paso a paso (comandos exactos, checklist, permissions, verificación, troubleshooting)
+14. /docs/CHECKLIST.md -> checklist previo al go-live (DNS, SSL, robots, GA, sitemap, robots)
+15. /src/content-ready/   -> carpeta con los MDX/JSON generados por los prompts previos (destinos, blog-ideas, calendar-2026.json, og-prompts.json)
+16. /scripts/generate-release-zip.sh -> script que crea chroma-deploy.zip desde dist/ + deploy/ essentials
+17. /README_DEPLOY.txt    -> resumen ejecutable con pasos rápidos (scp, ssh, run provision, run deploy)
+
+REQUISITOS FUNCIONALES DEL SCRIPT EN REPLIT
+
+* Detectar si el proyecto es Next.js / React SPA / static site o WordPress plugin; compilar/ exportar según corresponda:
+
+  * Next.js: `npm install && npm run build && npm run export` (si export posible) o `npm run build` + incluir start script.
+  * React/Vite SPA: `npm install && npm run build` and copy `dist` to /dist
+  * WordPress plugin: copy plugin folder to /dist/chroma-blocks (built)
+* Generar `/dist` con los assets listos.
+* Crear `chroma-deploy.zip` conteniendo:
+
+  * /dist (build)
+  * deploy/* (scripts listos)
+  * docs/*
+  * src/content-ready/* (MDX + JSON)
+  * env.example
+  * README_DEPLOY.txt
+
+PROVISION.SH (lo que debe hacer exactamente)
+
+* apt update && apt upgrade -y
+* instalar unzip, git, curl, wget, certbot, python3-certbot, postgresql-client (no server si usan RDS), mailutils (opcional)
+* instalar nvm + node LTS (22.x) o apt node si prefieres
+* instalar pm2 global (npm i -g pm2) opcional
+* instalar docker & docker-compose-plugin (opcional) y agregar user al grupo docker
+* crear usuarios y carpetas seguras:
+
+  * /var/www/chroma (owner www-data or nobody según OLS)
+  * /backups/chroma
+* configurar UFW (allow ssh, http, https) y fail2ban basic
+* instrucciones para obtener password panel OpenLiteSpeed (si aplicable)
+
+DEPLOY.SH (pasos exactos y seguros)
+
+* detener servicio pm2 chroma-app si existe
+* descomprimir chroma-deploy.zip en /var/www/chroma (hacer backup previo si existe)
+* copiar env.example -> .env (no sobrescribir si ya existe, preguntar)
+* si Node app:
+
+  * cd /var/www/chroma && npm ci --production && npm run build
+  * pm2 start ecosystem.config.js OR pm2 start npm --name chroma-app -- start -- -p 3001
+  * pm2 save
+* si static:
+
+  * asegurar index.html en /var/www/chroma
+* si Docker:
+
+  * docker compose pull && docker compose up -d --build
+* registrar logs output y exit code; si falla, rollback to previous tar.gz (script debe crear backup tar.gz antes de sobrescribir)
+
+OLS VIRTUAL HOST SAMPLE (vhconf.conf)
+
+* incluir Static context para / (point to /var/www/chroma/public or /var/www/chroma/.next)
+* incluir Proxy context si Node app (127.0.0.1:3001)
+* incluir mappings y rewrite rules for trailing slash and index fallback
+* instrucciones para añadir SSL cert paths (Certbot) en UI
+
+CERTBOT STEPS (texto claro)
+
+* certbot certonly --webroot -w /var/www/chroma/public -d chromatravel.com -d [www.chromatravel.com](http://www.chromatravel.com)
+* copiar fullchain.pem and privkey.pem into OLS panel SSL section for the Virtual Host
+* test renewal: certbot renew --dry-run
+
+BACKUPS & HEALTHCHECK
+
+* backup_chroma.sh: pg_dump (if PG exists) -> /backups/chroma/YYYY-MM-DD.sql ; rsync /var/www/chroma/public -> /backups/chroma/public-YYYY-MM-DD
+* healthcheck_chroma.sh: curl -sf [https://chromatravel.DOMAIN/api/health](https://chromatravel.DOMAIN/api/health) || notify via mail/telegram (explain how to configure mailx or Telegram bot)
+* crontab entries suggested:
+
+  * 30 2 * * * /deploy/backup_chroma.sh
+  * */5 * * * * /deploy/healthcheck_chroma.sh
+
+PERMISSIONS & SELINUX NOTES
+
+* set proper permissions: chown -R www-data:www-data /var/www/chroma (or nobody:nogroup per OLS recommendation)
+* set umask and file permissions for uploads and logs
+* note about SELinux (if using CentOS) — commands to set context (optional)
+
+DOCS: DEPLOY_HOSTINGER.md must include
+
+* Pre-checks: DNS A records, propagation, current fenixtravel config (do not modify)
+* Step-by-step commands to upload zip via scp, run provision.sh, run deploy.sh
+* How to add Virtual Host in OpenLiteSpeed panel (click by click)
+* How to add SSL cert in panel using files from /etc/letsencrypt/live/...
+* How to test and rollback
+* Troubleshooting common errors (ports, PM2, permissions, Certbot)
+
+EXTRA: provide a short CI snippet (GitHub Actions) that:
+
+* runs build on push to main
+* creates chroma-deploy.zip artifact
+* optionally SFTP upload to VPS (if SSH key configured)
+
+LOGGING & REPORT
+
+* At the end of Replit process, print a short table summarizing:
+
+  * files created (paths)
+  * zip size
+  * command to scp the zip to the VPS
+  * exact commands to run on the VPS after upload (provision + deploy)
+  * list of env variables to set (copy from env.example)
+
+SAFETY / DRY RUN MODE
+
+* Provide flag `--dry-run` that does everything but DOES NOT write the deploy zip nor overwrite existing dist files; outputs the calendar-2026.json and logs only.
+
+ENTREGABLES
+
+* Commit all files into repo under /deploy and /dist
+* Create chroma-deploy.zip at /deploy/chroma-deploy.zip
+* Output in console final instruction block to run on VPS (scp command + ssh run provision + deploy)
+
+FIN: imprimir resumen final listo para pegar en tu terminal con los 3 comandos:
+
+1. scp /deploy/chroma-deploy.zip root@72.60.225.187:/tmp/
+2. ssh root@72.60.225.187 "bash /tmp/provision.sh"  (or run after scp)
+3. ssh root@72.60.225.187 "bash /tmp/deploy.sh /tmp/chroma-deploy.zip"

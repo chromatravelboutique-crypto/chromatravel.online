@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  AGENCY
+  ADMIN
+  VENDOR
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  CANCELLED
+  COMPLETED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  PARTIAL
+}
+
+enum MinorPolicyType {
+  FREE
+  PAID
+  PROMOTION
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  fullName      String
+  phone         String    @unique
+  whatsapp      String?
+  birthDate     DateTime?
+  role          UserRole  @default(CUSTOMER)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // B2B Agency fields
+  agencyName    String?
+  agencyCode    String?   @unique // MC Number
+  agencyFN      String?   @unique // FN Number
+  commissionRate Decimal? @default(0)
+
+  // Relations
+  bookings      Booking[]
+  kuaniPoints   KuaniPoints?
+  auditLogs     AuditLog[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+}
+
+model KuaniPoints {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  balance         Int      @default(0)
+  lifetimeEarned  Int      @default(0)
+  lifetimeRedeemed Int     @default(0)
+  lastActivityAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    PointsTransaction[]
+
+  @@index([userId])
+}
+
+model PointsTransaction {
+  id            String   @id @default(cuid())
+  kuaniPointsId String
+  amount        Int      // Positive for earned, negative for redeemed
+  type          String   // EARN_BOOKING, REDEMPTION, BONUS_BIRTHDAY, ADJUSTMENT
+  description   String
+  bookingId     String?
+  createdAt     DateTime @default(now())
+
+  kuaniPoints   KuaniPoints @relation(fields: [kuaniPointsId], references: [id], onDelete: Cascade)
+
+  @@index([kuaniPointsId])
+  @@index([bookingId])
+}
+
+model Hotel {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  destination   String
+  city          String
+  country       String   @default("México")
+  stars         Int
+  amenities     String[] // Array of amenities
+  description   String?
+  images        String[] // URLs to images
+  isActive      Boolean  @default(true)
+  provider      String?  // Naturleon, MegaTravel, FPV, etc.
+  providerCode  String?  // External ID from provider
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  blocks        Block[]
+
+  @@index([slug])
+  @@index([destination])
+  @@index([isActive])
+  @@fulltext([name, description])
+}
+
+model Block {
+  id            String   @id @default(cuid())
+  hotelId       String
+  checkIn       DateTime
+  checkOut      DateTime
+  initialStock  Int
+  soldStock     Int      @default(0)
+  status        String   @default("active") // active, sold_out, expired, suspended
+  provider      String
+  providerCode  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotel         Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rates         Rate[]
+  bookings      Booking[]
+
+  @@unique([hotelId, checkIn, checkOut])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@index([status])
+  @@index([provider])
+}
+
+model Rate {
+  id            String   @id @default(cuid())
+  blockId       String
+  roomType      String   // SGL, DBL, TPL, QDP
+  price         Decimal
+  currency      String   @default("MXN")
+  minorPolicy   String?  // JSON: {"type": "free", "minAge": 0, "maxAge": 12}
+  benefits      String?  // JSON array of benefits
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  block         Block    @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@unique([blockId, roomType])
+  @@index([roomType])
+}
+
+model Booking {
+  id            String         @id @default(cuid())
+  userId        String
+  blockId       String
+  roomType      String
+  adults        Int
+  minors        Json?        // Array of minor ages
+  status        BookingStatus @default(PENDING)
+  totalAmount   Decimal
+  paidAmount    Decimal      @default(0)
+  remainingAmount Decimal
+  checkIn       DateTime
+  checkOut      DateTime
+  confirmationCode String?   @unique
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id])
+  block         Block         @relation(fields: [blockId], references: [id])
+  payments      Payment[]
+  auditLogs     AuditLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([confirmationCode])
+}
+
+model Payment {
+  id            String         @id @default(cuid())
+  bookingId     String
+  amount        Decimal
+  currency      String         @default("MXN")
+  status        PaymentStatus  @default(PENDING)
+  method        String         // clip_card, bank_transfer, cash, points
+  transactionId String?        @unique // External payment gateway ID
+  receiptUrl    String?
+  failureReason String?
+  paidAt        DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  booking       Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([transactionId])
+  @@index([status])
+}
+
+model InventoryLog {
+  id            String   @id @default(cuid())
+  blockId       String
+  action        String   // IMPORT, RESERVE, RELEASE, ADJUST, CANCEL
+  previousStock Int?
+  newStock      Int
+  reason        String?
+  performedBy   String?  // userId or system
+  createdAt     DateTime @default(now())
+
+  @@index([blockId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  action        String
+  entityType    String   // Booking, User, Block, etc.
+  entityId      String
+  oldValues     Json?
+  newValues     Json?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  user          User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model WebhookEvent {
+  id            String   @id @default(cuid())
+  provider      String   // clip, stripe, etc.
+  eventType     String
+  payload       Json
+  processed     Boolean  @default(false)
+  processedAt   DateTime?
+  errorMessage  String?
+  retryCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([provider])
+  @@index([processed])
+  @@index([createdAt])
+}

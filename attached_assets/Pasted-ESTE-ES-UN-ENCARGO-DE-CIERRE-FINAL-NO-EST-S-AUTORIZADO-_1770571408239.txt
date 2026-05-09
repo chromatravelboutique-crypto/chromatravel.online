@@ -1,0 +1,134 @@
+ESTE ES UN ENCARGO DE CIERRE FINAL.
+NO ESTÁS AUTORIZADO A REFACTORIZAR, REDISEÑAR NI “MEJORAR”.
+NO ENTRES EN CICLOS DE CORRECCIÓN INFINITA.
+NO PROPONGAS FEATURES NUEVOS.
+NO TOQUES ARCHIVOS QUE NO SEAN NECESARIOS.
+
+OBJETIVO ÚNICO:
+DEJAR CHROMATRAVEL.ONLINE LISTO PARA PRODUCCIÓN Y MONETIZACIÓN HOY.
+
+SI ALGO YA FUNCIONA, NO LO TOQUES.
+SI ALGO NO ES BLOQUEANTE, NO LO CAMBIES.
+
+====================================================
+1) HOME — TARIFAS ESPECIALES (OBLIGATORIO)
+====================================================
+
+ACCIÓN DIRECTA:
+- OCULTAR (NO BORRAR) el motor de búsqueda TBO en HOME.
+- USAR EXACTAMENTE SU ESPACIO VISUAL.
+
+MOSTRAR EN SU LUGAR:
+🔥 “Tarifas Especiales por Tiempo Limitado”
+
+DATOS PÚBLICOS:
+- Hotel
+- Destino
+- Fechas
+- Precio “Desde”
+- Badge simple (Disponible / Últimas habitaciones)
+
+CTA ÚNICO:
+“Consultar disponibilidad por WhatsApp”
+
+REGLAS:
+- Fuente: tabla de bloqueos activos existente
+- NO proveedor
+- NO notas
+- NO IDs internos
+
+SI ESTO NO QUEDA VISIBLE EN HOME → EL TRABAJO ES INCORRECTO.
+
+====================================================
+2) LEADS — PRUEBAS REALES (NO TEÓRICAS)
+====================================================
+
+CHROMA (OBLIGATORIO):
+- Ejecutar un envío REAL de lead
+- Confirmar:
+  - Lead guardado en BD
+  - Email enviado
+
+ENTREGAR PRUEBAS:
+- Log o screenshot del email enviado
+- Registro en BD con ID y timestamp
+- Endpoint exacto usado
+
+FÉNIX:
+- Confirmar estado REAL:
+  - Leads se guardan
+  - Emails NO se envían
+
+DECIR CLARO:
+- Qué falta para activar email
+- Variables necesarias
+- Riesgo si se activa hoy
+
+NO PROPONER SOLUCIONES.
+SOLO ESTADO REAL.
+
+====================================================
+3) SEGURIDAD — SOLO LO CRÍTICO
+====================================================
+
+CORREGIR ÚNICAMENTE ESTO:
+
+- ELIMINAR o PROTEGER:
+  /env-file.txt
+
+- PROTEGER CON AUTH ADMIN:
+  /download-deploy
+  /ecosystem.config.cjs
+
+- SANITIZAR:
+  /api/paquetes-bloqueos/:id
+  (igual que el endpoint bulk)
+
+- QUITAR:
+  X-Powered-By
+
+NO IMPLEMENTAR SISTEMAS NUEVOS.
+NO CAMBIAR AUTH.
+NO AGREGAR CSP COMPLEJA.
+
+====================================================
+4) SEO / BLOG / ADS — SOLO VERIFICAR
+====================================================
+
+CONFIRMAR (NO CAMBIAR):
+- Sitemap incluye tarifas-especiales
+- Blog indexable
+- GA4 activo
+- Meta Pixel activo
+- AdSense activo
+
+SOLO REPORTAR ESTADO.
+
+====================================================
+5) PARADA OBLIGATORIA
+====================================================
+
+DESPUÉS DE COMPLETAR LO ANTERIOR:
+❌ DETENTE
+❌ NO SIGAS “OPTIMIZANDO”
+❌ NO HAGAS SUGERENCIAS
+
+====================================================
+6) REPORTE FINAL OBLIGATORIO
+====================================================
+
+ENTREGAR REPORTE CORTO Y CONCISO:
+
+- Home: OK / NO OK
+- Tarifas Especiales visibles en HOME: SÍ / NO
+- Leads Chroma: OK / NO OK (con pruebas)
+- Leads Fénix: Estado actual
+- Seguridad crítica: CERRADA / ABIERTA
+- SEO / Ads: OK
+
+VEREDICTO FINAL (UNA SOLA FRASE):
+👉 LISTO PARA PRODUCCIÓN Y MONETIZACIÓN
+👉 NO LISTO (listar SOLO bloqueantes reales)
+
+SI NO HAY BLOQUEANTES REALES:
+CIERRA E

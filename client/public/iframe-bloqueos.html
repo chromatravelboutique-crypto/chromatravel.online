@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tarifas Especiales — Chroma Travel Boutique</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --em:#10b981;--em-deep:#065f46;--em-glow:rgba(16,185,129,.15);
+  --bg:#050a08;--surface:#0a1410;--surface2:#0f1f18;
+  --border:#1a2f24;--text:#f0faf5;--muted:#6b8f7a;
+  --gold:#d4af37;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+.header{
+  position:sticky;top:0;z-index:100;
+  background:linear-gradient(135deg,#050a08 0%,#071410 100%);
+  border-bottom:1px solid rgba(16,185,129,.15);
+  padding:14px 20px;display:flex;align-items:center;justify-content:space-between;
+  backdrop-filter:blur(12px);
+}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{
+  width:36px;height:36px;
+  background:linear-gradient(135deg,var(--em),#059669);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.brand-name{font-family:'Cormorant Garamond',serif;font-size:18px;color:#fff;letter-spacing:.5px}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--em);background:rgba(16,185,129,.08);padding:4px 10px;border-radius:999px;border:1px solid rgba(16,185,129,.2)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--em);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.filters{padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap}
+.filter-select,.filter-input{
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:7px 11px;border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;
+  flex:1;min-width:130px;transition:border-color .2s;outline:none;cursor:pointer;
+}
+.filter-select:focus,.filter-input:focus{border-color:var(--em)}
+.filter-input::placeholder{color:var(--muted)}
+
+.meta{padding:8px 18px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.meta span{color:var(--em);font-weight:600}
+
+.grid{padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;
+}
+.card:hover{transform:translateY(-3px);border-color:rgba(16,185,129,.35);box-shadow:0 8px 32px var(--em-glow)}
+
+.card-img{
+  height:120px;display:flex;flex-direction:column;
+  justify-content:flex-end;padding:10px 12px;position:relative;overflow:hidden;
+}
+.card-img::before{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,transparent 20%,rgba(0,0,0,.65) 100%)}
+.card-hotel{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;position:relative;z-index:1}
+.card-loc{font-size:11px;color:rgba(255,255,255,.75);position:relative;z-index:1;margin-top:3px;display:flex;align-items:center;gap:4px}
+.badge-stock{background:rgba(239,68,68,.9);color:#fff;font-size:9px;padding:2px 6px;border-radius:999px;font-weight:700;position:absolute;top:10px;right:10px;z-index:2;animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+
+.card-body{padding:12px}
+.dates{font-size:11px;color:var(--muted);margin-bottom:6px}
+.nights-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:999px;border:1px solid var(--border);margin-bottom:7px}
+.plan{font-size:10px;color:var(--muted);margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prices{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.price-chip{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 10px;text-align:center;flex:1;min-width:60px}
+.price-chip-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.price-chip-val{font-size:14px;font-weight:600;color:var(--em);line-height:1.3}
+.btn-wa{
+  display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:9px;
+  background:linear-gradient(135deg,#25d366,#128c7e);
+  color:#fff;font-weight:600;font-size:12px;border:none;border-radius:8px;
+  cursor:pointer;text-decoration:none;transition:opacity .2s;
+}
+.btn-wa:hover{opacity:.9}
+.btn-wa svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}
+.state{text-align:center;padding:60px 20px;color:var(--muted)}
+.state-icon{font-size:40px;margin-bottom:12px;display:block}
+footer{text-align:center;padding:14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
+footer a{color:var(--em);text-decoration:none;font-weight:500}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-icon">💎</div>
+    <div>
+      <div class="brand-name">Chroma Travel Boutique</div>
+      <div class="brand-sub">Experiencias exclusivas</div>
+    </div>
+  </div>
+  <div class="live-badge"><span class="live-dot"></span>En vivo</div>
+</div>
+
+<div class="filters">
+  <select class="filter-select" id="destino"><option value="">📍 Todos los destinos</option></select>
+  <select class="filter-select" id="tipo">
+    <option value="">🛏️ Tipo de hab.</option>
+    <option value="SGL">Sencilla</option>
+    <option value="DBL">Doble</option>
+    <option value="TPL">Triple</option>
+  </select>
+  <input class="filter-input" id="buscar" type="text" placeholder="🔍 Buscar hotel...">
+</div>
+
+<div class="meta"><div id="count">Cargando...</div><div id="updated"></div></div>
+<div class="grid" id="grid"><div class="state"><span class="state-icon">⏳</span>Cargando tarifas...</div></div>
+<footer>Powered by <a href="https://www.chromatravel.online" target="_blank">chromatravel.online</a> · <a href="https://wa.me/524434044104" target="_blank">WhatsApp</a></footer>
+
+<script>
+const API='https://chroma-production-2757.up.railway.app/api/tarifas-especiales';
+const WA='https://wa.me/524434044104?text=';
+let all=[];
+const fmt=n=>n>0?'$'+parseFloat(n).toLocaleString('es-MX',{maximumFractionDigits:0}):null;
+const fDate=s=>{if(!s)return'';const[y,m,d]=s.split('T')[0].split('-');return`${d}/${m}/${(y||'').slice(2)}`};
+const colors=['#065f46','#1e3a5f','#4c1d95','#831843','#14532d','#134e4a','#1c1917'];
+
+async function load(){
+  try{
+    const r=await fetch(API);
+    const d=await r.json();
+    all=Array.isArray(d)?d:(d.tarifas||d.bloqueos||d.data||[]);
+    const destinos=[...new Set(all.map(b=>b.destino||b.destination||'').filter(Boolean))].sort();
+    const sel=document.getElementById('destino');
+    destinos.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o)});
+    document.getElementById('updated').textContent='Actualizado '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+    render(all);
+  }catch(e){
+    document.getElementById('grid').innerHTML='<div class="state"><span class="state-icon">⚠️</span>Error al cargar tarifas.</div>';
+  }
+}
+
+function getField(b,...keys){for(const k of keys)if(b[k]!==undefined&&b[k]!==null&&b[k]!=='')return b[k];return''}
+
+function render(data){
+  document.getElementById('count').innerHTML=`<span>${data.length}</span> tarifas disponibles`;
+  if(!data.length){document.getElementById('grid').innerHTML='<div class="state"><span class="state-icon">🔍</span>Sin resultados</div>';return}
+  document.getElementById('grid').innerHTML=data.slice(0,80).map((b,i)=>{
+    const hotel=getField(b,'hotel','Hotel','nombre');
+    const destino=getField(b,'destino','destination','Destino');
+    const checkIn=getField(b,'checkIn','fecha_inicio','FechaInicio');
+    const checkOut=getField(b,'checkOut','fecha_fin','FechaFin');
+    const noches=getField(b,'nights','noches','Noches');
+    const tipo=getField(b,'roomType','tipo_habitacion','tipoHabitacion');
+    const plan=getField(b,'mealPlan','plan','Plan','observaciones');
+    const estrellas=getField(b,'stars','estrellas','Estrellas')||4;
+    const sgl=fmt(getField(b,'priceSingle','tarifa_sencilla','precioSgl'));
+    const dbl=fmt(getField(b,'priceDouble','tarifa_doble','precioDbl'));
+    const tpl=fmt(getField(b,'priceTriple','tarifa_triple','precioTpl'));
+    const main=dbl||sgl||tpl||'$0';
+    const disp=getField(b,'habitaciones_disponibles','habitacionesDisponibles');
+    const bajo=disp!==undefined&&disp!==true&&disp<=3;
+    const color=colors[i%colors.length];
+    const msg=encodeURIComponent(`Hola! Me interesa:\n🏨 ${hotel} — ${destino}\n📅 ${checkIn} al ${checkOut} (${noches}N)\n🛏️ ${tipo}\n💰 Desde ${main}/pxpn\n¿Tienen disponibilidad?`);
+    return`<div class="card">
+      <div class="card-img" style="background:linear-gradient(135deg,${color},#050a08)">
+        ${bajo?'<span class="badge-stock">¡Últimas!</span>':''}
+        <div class="card-hotel">${hotel}</div>
+        <div class="card-loc">📍 ${destino} · ⭐ ${estrellas}</div>
+      </div>
+      <div class="card-body">
+        <div class="dates">📅 ${fDate(checkIn)} → ${fDate(checkOut)}</div>
+        <span class="nights-pill">🌙 ${noches} noches · ${tipo}</span>
+        <div class="plan">${(plan||'').split('[')[0].trim()}</div>
+        <div class="prices">
+          ${sgl?`<div class="price-chip"><div class="price-chip-label">SGL</div><div class="price-chip-val">${sgl}</div></div>`:''}
+          ${dbl?`<div class="price-chip"><div class="price-chip-label">DBL</div><div class="price-chip-val">${dbl}</div></div>`:''}
+          ${tpl?`<div class="price-chip"><div class="price-chip-label">TPL</div><div class="price-chip-val">${tpl}</div></div>`:''}
+        </div>
+        <a class="btn-wa" href="${WA}${msg}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.561 4.14 1.535 5.874L.057 23.5l5.797-1.516A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.865 0-3.608-.502-5.112-1.378l-.366-.216-3.44.9.918-3.352-.237-.384A9.946 9.946 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+          Cotizar por WhatsApp
+        </a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filter(){
+  const dest=document.getElementById('destino').value;
+  const tipo=document.getElementById('tipo').value;
+  const bus=document.getElementById('buscar').value.toLowerCase();
+  render(all.filter(b=>{
+    const d=getField(b,'destino','destination');
+    const t=getField(b,'roomType','tipo_habitacion','tipoHabitacion');
+    const h=getField(b,'hotel','Hotel','nombre').toLowerCase();
+    return(!dest||d===dest)&&(!tipo||t===tipo)&&(!bus||h.includes(bus));
+  }));
+}
+
+['destino','tipo'].forEach(id=>document.getElementById(id).addEventListener('change',filter));
+document.getElementById('buscar').addEventListener('input',filter);
+load();
+setInterval(load,300000);
+</script>
+</body>
+</html>

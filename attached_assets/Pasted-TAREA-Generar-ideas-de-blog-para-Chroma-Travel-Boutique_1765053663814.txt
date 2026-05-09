@@ -1,0 +1,118 @@
+TAREA: Generar ideas de blog para "Chroma Travel Boutique" (luxury LGBT travel), crear archivos de datos y plantillas MDX para cada idea. Entregar en este repo la carpeta /src/content/blog con archivos .mdx, un JSON con metadatos y un script que genera/actualiza posts desde el JSON.
+
+REQUISITOS:
+- Idioma: Español (es/es). También incluir slug en inglés opcional.
+- Enfoque: Viajeros LGBT de alto poder adquisitivo → contenido premium, orientado a CONVERSIÓN (lead gen, paquetes VIP, bodas destino).
+- SEO: cada idea debe traer: title SEO (<=60 chars), meta description (140–160 chars), keyword principal, intención (informacional/comercial/transactional), suggested wordcount, suggested OG image name, suggested internal links (2), CTA recomendado.
+- Salida:
+  - /src/data/blog-ideas.json  -> array con todas las ideas y campos (ver schema)
+  - /src/content/blog/{slug}.mdx -> archivo MDX con frontmatter (title, date, keywords, description, ogImage, canonical, author, wordcount) y sección placeholder de contenido con estructura (Intro, H2s, FAQ schema block)
+  - /scripts/generateBlogFromJSON.js -> lee JSON y crea/actualiza MDX
+  - /README_BLOG.md -> instrucciones rápidas: cómo editar JSON y regenerar MDX
+
+FORMATO DE SALIDA (ejemplo de un item JSON):
+{
+  "title": "Puerto Vallarta de Lujo: Guía VIP para viajeros LGBT 2026",
+  "seoTitle": "Puerto Vallarta Luxury Guide para Viajeros LGBT - Chroma",
+  "metaDescription": "Guía VIP 2026: hoteles 5★, experiencias privadas y seguridad para viajeros LGBT en Puerto Vallarta. Paquetes boutique y reservas VIP.",
+  "keyword": "puerto vallarta luxury gay travel",
+  "intent": "transactional",
+  "slug": "puerto-vallarta-luxury-gay-travel",
+  "wordcount": 1600,
+  "ogImage": "og-puerto-vallarta-luxury.png",
+  "internalLinks": ["/landings/puerto-vallarta-luxury-gay-travel","/pages/blog/top-12-hoteles-gay-friendly-mexico"],
+  "cta": "Solicitar Cotización VIP",
+  "publishPriority": "alta"
+}
+
+ENTREGABLE: 30 ideas (mínimo 25) agrupadas por categoría:
+- Landing-driven (venta directa / transactional) [10]
+- Authority / Guides (informational / SEO evergreen) [10]
+- Niche / Long-form (retreats, bodas, trans travel, wellness) [10]
+
+GENERAR: JSON con los 30 items y crear MDX iniciales (intro + outline con H2/H3 + 5 FAQs que luego se inyectarán como FAQ schema).
+
+ADICIONALES:
+- Añadir tag "target" (parejas, bodas, wellness, solteros, lujo) para segmentación.
+- Incluir campo "seasonality" (mejor época) y "estimatedPriceRange" (USD).
+- Añadir campo "imagePrompt" con sugerencia para generar OG en IA (breve).
+- Ordenar las ideas por prioridad comercial (publishPriority: alta/media/baja).
+
+SCRIPTS Y COMANDOS (para Replit / Node):
+1) instalar deps (si hace falta)
+   npm init -y
+   npm i fs-extra gray-matter
+
+2) scripts/generateBlogFromJSON.js (básico)
+   // node script que lee src/data/blog-ideas.json y crea/actualiza src/content/blog/{slug}.mdx
+   const fs = require('fs-extra');
+   const path = require('path');
+   const posts = require('../src/data/blog-ideas.json');
+   const outDir = path.join(__dirname,'../src/content/blog');
+   fs.ensureDirSync(outDir);
+   posts.forEach(p => {
+     const fm = `---\ntitle: "${p.title}"\ndate: "${new Date().toISOString()}"\nseoTitle: "${p.seoTitle}"\ndescription: "${p.metaDescription}"\nkeywords: ["${p.keyword}"]\nogImage: "${p.ogImage}"\nwordcount: ${p.wordcount}\ncanonical: "/blog/${p.slug}"\nauthor: "Chroma Travel Boutique"\n---\n\n# ${p.title}\n\n> Resumen: ${p.metaDescription}\n\n## Introducción\n\n(Escribe aquí la introducción...)\n\n## Qué encontrarás en esta guía\n- Punto 1\n- Punto 2\n\n## H2 - Recomendación principal\n\n## H2 - Dónde alojarte (hoteles recomendados)\n\n## H2 - Experiencias VIP sugeridas\n\n## FAQ\n${p.faqs ? p.faqs.map(f=>`### ${f.q}\n\n${f.a}\n`).join('\\n') : ''}\n\n<!-- CTA -->\n<div className='cta'>${p.cta} — [Solicitar cotización](/contact)</div>\n`;
+     fs.writeFileSync(path.join(outDir, `${p.slug}.mdx`), fm, 'utf8');
+   });
+   console.log('MDX files generated.');
+3) Ejecutar:
+   node scripts/generateBlogFromJSON.js
+
+CHECKLIST SEO/CRO para cada post (chequeo automático/manual):
+- metaTitle <= 60 chars
+- metaDesc 140–160 chars
+- H1 contiene keyword
+- OG image exists in /public/og-images
+- internalLinks >=2
+- CTA presente y formulario operativo
+
+ENTREGA INICIAL (qué entregar en Replit al correr el prompt):
+- /src/data/blog-ideas.json (30 items completos)
+- /src/content/blog/*.mdx (30 archivos, básicos, listos para redactar)
+- /scripts/generateBlogFromJSON.js
+- /README_BLOG.md con instrucciones
+
+LISTA DE 30 IDEAS (ejemplos - cada item debe venir en el JSON):
+1) Puerto Vallarta de Lujo: Guía VIP para viajeros LGBT 2026 — transactional — (slug: puerto-vallarta-luxury-gay-travel)
+2) Tulum & Riviera Maya: Lun a de miel LGBT premium — transactional
+3) Bodas Igualitarias en México: pasos, costos y paquetes boutique — transactional
+4) Top 12 hoteles gay-friendly 5★ en México (2026) — informational
+5) Mykonos vs. Puerto Vallarta: dónde reservar tu viaje gay de lujo — informational
+6) Cruceros de Lujo LGBT: rutas y cómo reservar con servicios VIP — transactional
+7) Wellness queer: retiros exclusivos en México — niche
+8) Guía de seguridad para viajeros trans en Europa y México — informational
+9) Hoteles boutique en CDMX para parejas LGBT que buscan cultura — transactional
+10) Cómo organizar una propuesta romántica en Playa del Carmen — transactional
+11) Guía definitiva de Prides VIP: Tel Aviv, Madrid, NYC — informational
+12) Private Yacht Experience: Mykonos & Santorini para parejas — transactional
+13) Viajar solo y con estilo: mejores destinos LGBT para 40+ — informational
+14) Gastronomía queer: rutas gourmet en CDMX y Oaxaca — niche
+15) Fotografía de bodas LGBT en México: mejores proveedores — transactional
+16) Turismo responsable y queer: experiencias sostenibles en México — informational
+17) Los mejores beach clubs gay en México (PV, Playa, Cancún) — informational
+18) Viajes corporativos queer: bleisure premium en CDMX — niche
+19) Cómo elegir seguro de viaje para parejas LGBT — informational
+20) Paquetes VIP para aniversarios: ideas y presupuestos — transactional
+21) Guía de transporte privado y transfers VIP en Riviera Maya — transactional
+22) Viajar en crucero gay: etiqueta, eventos y dress code — informational
+23) Mejores festivales queer boutique en Europa — informational
+24) Cómo vender paquetes LGBT luxury: consejos para agencias — B2B
+25) Experiencias culinarias privadas para parejas LGBT — transactional
+26) Viajes LGBT+ con mascotas: hoteles pet-friendly premium — niche
+27) Escapadas románticas de 48 horas desde CDMX — transactional
+28) Tours culturales queer en Oaxaca y Mérida — informational
+29) Estrategia SEO para agencias LGBT: keywords y estructura — B2B
+30) Checklist de viaje VIP LGBT: documentos, seguridad y packing — informational
+
+ENTREGABLES ADICIONALES OPCIONALES (marcar si se quiere):
+- Generar 6 posts completos redactados (listo para publicar) de alta conversión.
+- Crear OG images mock en /public/og-images usando prompts (imagePrompt field).
+- Añadir plantilla de FAQ schema JSON-LD en cada MDX (incluir en frontmatter).
+
+CRITERIOS DE ACEPTACIÓN:
+- JSON contiene 30 items válidos y completos.
+- MDX generados para cada slug en /src/content/blog.
+- Script genera/actualiza MDX sin errores.
+- README_BLOG.md explica cómo editar JSON y regenerar MDX.
+
+FIN.

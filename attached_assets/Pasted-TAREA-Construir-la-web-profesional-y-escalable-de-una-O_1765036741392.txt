@@ -1,0 +1,101 @@
+TAREA: Construir la web profesional y escalable de una OTA llamada "chromaTravelBoutique" orientada al mercado LGBT+. Entregar código y guía completa para desplegar en Hostinger (web) y un VPS (servicios, integraciones). Diseño vistoso, elegante, moderno y seguro; optimizado para conversiones, SEO y escalable para conectar bancos de camas, APIs/XML de proveedores de hoteles, vuelos y otros servicios.
+
+OBJETIVO:
+- Venta directa B2C de paquetes, hoteles, vuelos, experiencias y tours LGBT+-friendly.
+- Generar leads, reservas online y venta de paquetes personalizados.
+- Escalable para integrar bed-banks (hotel wholesales), APIs de aerolíneas (REST/XML), GDSs o agregadores (Amadeus/Sabre/Travelport/Amadeus Self-Service), y OTAs externas si se necesita.
+
+PÚBLICO:
+- Personas LGBT+ (viajeros y parejas), 25–55 años, buscan experiencia segura, inclusiva y premium o boutique.
+- Idiomas: Español (primario) e Inglés (alternativo). Multimoneda.
+
+ENTREGABLES:
+1. Sitio web React/Next.js (SSR/ISR) + Tailwind. Código limpio, componentes reutilizables.
+2. CMS Headless (Strapi o Sanity) con panel para editar contenidos, promociones, FAQ y landing pages.
+3. Motor de reservas (backend Node.js/Express o Next API routes) con:
+   - Conector genérico para consumir APIs REST y XML (soporte SOAP si necesario).
+   - Adapter pattern para integrar: Hotelbeds, Beds24, DOTW, Amadeus, Skyscanner, etc.
+   - Normalize responses a un modelo interno (hotel, habitación, tarifa, disponibilidad).
+   - Webhooks para confirmaciones y cambios de estado.
+4. Integración de pagos: OpenPay y Clip (si no es posible, incluir Stripe como fallback). Multimoneda y manejo de reembolsos.
+5. Panel administrativo (roles: admin, agente, marketing) para gestionar reservas, inventario, tarifas y usuarios.
+6. Landing pages optimizadas para SEO + blog con estructura para contenido LGBT travel.
+7. Formulario de lead + chat/WhatsApp/Telegram + envío automático de emails (SendGrid o similar).
+8. Documentación paso a paso para deploy en Hostinger (front) y VPS (backend, cronjobs, workers, certificados SSL).
+9. Guía para conectar proveedores XML/REST: ejemplo de onboarding con credentials, pruebas sandbox, manejo de errores y reconciliación.
+10. Tests básicos: E2E flows de reserva, tests unitarios para adapters, pruebas de integración de pago.
+
+REQUERIMIENTOS DE UI / UX:
+- Identidad visual: paleta vibrante y sofisticada (sugerencia: degradados jewel-tone + acentos neón), tipografía legible, imagenes inclusivas.
+- Hero claro: propuesta de valor + CTA "Buscar viajes" y "Contactar asesor".
+- Filtros de búsqueda por destino, fecha, tipo de experiencia, grado de accesibilidad/servicios LGBT-friendly, rango de precio.
+- Ficha de producto clara: disponibilidad por tarifa, inclusión/exclusión, políticas de cancelación, pago seguro.
+- Proceso de compra en 3 pasos max (selección → datos → pago).
+- Microcopy que genere confianza: iconos de verificación, políticas, reviews verificadas.
+- Mobile-first, accesible (WCAG AA), tiempos de carga <2.5s en móvil.
+
+FUNCIONALIDADES TÉCNICAS CLAVE:
+- Arquitectura: Next.js + Node/Express o Next API; DB PostgreSQL o MySQL; Redis para cache de inventario/tasas; S3 para assets.
+- API Layer:
+  - Adapter genérico que acepte REST, XML, SOAP y Webhooks.
+  - Retries con backoff y circuit breaker.
+  - Mapping y deduplicación de inventario.
+- Sincronización de inventario:
+  - Polling configurable y webhooks si el proveedor lo permite.
+  - Logs y reconciliación diaria.
+- Seguridad:
+  - HTTPS, CSP, XSS/CSRF protections, encriptación de datos sensibles.
+  - Storage seguro de tokens (no en repo).
+  - Compliance básica con privacidad (aviso de cookies, política de privacidad).
+- Escalabilidad:
+  - Docker + docker-compose; posibilidad de orquestar con Kubernetes.
+  - Workers para colas de reserva (BullMQ/Redis).
+- Observabilidad:
+  - Logging estructurado, Sentry para errores, métricas Prometheus/Grafana o alternativa ligera.
+- Backoffice:
+  - Gestión de tarifas, cancelaciones, emisión de vouchers y PDF de reserva.
+  - Reportes: ventas diarias, conversión, fuentes de tráfico.
+- Integraciones:
+  - Email transactional (SendGrid/Mailgun).
+  - Analytics: Google Analytics 4, Pixel de Meta.
+  - SEO: sitemap.xml dinámico, schema.org para productos/experiences.
+  - Social login (Google/Facebook/Apple opcional).
+- Requisitos legales:
+  - Modo para marcar proveedores LGBT-friendly con tags y pruebas documentales.
+  - Consentimiento para marketing y almacenamiento de datos.
+
+UX COPY / BRAND TONE:
+- Cercano, profesional, seguro e inclusivo. Mensajes claros: “Viaja con libertad. Experiencias diseñadas para ti.”
+- CTAs directos: “Buscar viajes”, “Hablar con un asesor”, “Reservar ahora”.
+
+ACCEPTANCE CRITERIA (cómo probar que está listo):
+- Flujo de búsqueda a reserva: reservar un hotel y recibir confirmación por e-mail.
+- Integración de al menos un proveedor sandbox (XML o REST) con resultados normalizados.
+- Pago sandbox completado con OpenPay o Stripe.
+- Panel admin funcional con edición de contenidos y listado de reservas.
+- Documentación de despliegue y credenciales de prueba incluidas.
+
+DEPLOY / ENTREGAS:
+- Repo Git + README con instrucciones.
+- Script de deploy para Hostinger (build static + serverless) y VPS (docker-compose up).
+- Archivos .env.example (sin credenciales).
+- Guía de conexión para proveedores: URL sandbox, endpoints, ejemplo de request/response y pruebas.
+
+PRIORIDADES MÍNIMAS (MVP en 4 semanas):
+1. Home, búsqueda de hoteles, ficha de hotel, proceso de reserva simple (sandbox).
+2. Backoffice básico y CMS.
+3. Pago sandbox integrado.
+4. Documentación para conectar un bed-bank XML/REST.
+
+NOTAS ADICIONALES PARA EL DESARROLLADOR:
+- Entregar UI responsiva y componentes reutilizables.
+- Incluir tests básicos y CI (GitHub Actions).
+- Mantener el código modular para añadir otras verticales (vuelos, autos, tours).
+- Proveer ejemplos de payloads XML y mapeo a JSON.
+- Incluir un checklist para la certificación de proveedores LGBT-friendly.
+
+FECHA LÍMITE Y COMUNICACIÓN:
+- Entregar demo funcional en staging en 2 semanas (MVP mínimo).
+- Documentar hitos semanales y acceso a demo público.
+
+FIN.

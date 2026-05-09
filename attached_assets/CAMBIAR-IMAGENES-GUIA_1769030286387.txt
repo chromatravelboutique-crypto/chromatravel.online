@@ -1,0 +1,264 @@
+═══════════════════════════════════════════════════════════════════
+  CÓMO CAMBIAR IMÁGENES EN TU WEB DE CHROMA
+  Guía rápida desde móvil o desktop
+═══════════════════════════════════════════════════════════════════
+
+🎯 OBJETIVO: Cambiar las imágenes del sitio que ya está funcionando
+
+═══════════════════════════════════════════════════════════════════
+📱 MÉTODO 1: SUBIR NUEVA IMAGEN (MÁS FÁCIL)
+═══════════════════════════════════════════════════════════════════
+
+PASO 1: Preparar tu imagen
+──────────────────────────────────────────────────────────────────
+• Guarda la nueva imagen que quieres usar
+• Ponle un nombre simple: ej. "nuevo-logo.png" o "kuani-nuevo.png"
+
+PASO 2: Subir a Replit
+──────────────────────────────────────────────────────────────────
+En Replit:
+1. Abre tu proyecto "Chroma Website"
+2. Ve a la carpeta "assets" (panel izquierdo)
+3. Toca los 3 puntitos (•••) → "Upload file"
+4. Selecciona tu nueva imagen
+5. Espera a que suba
+
+PASO 3: Cambiar referencia en el código
+──────────────────────────────────────────────────────────────────
+1. Abre "index.html"
+2. Busca (Ctrl+F o Cmd+F):
+
+   ¿Quieres cambiar el LOGO?
+   Busca: <img src="./assets/logo-chroma.png"
+   
+   ¿Quieres cambiar KUANI?
+   Busca: <img src="./assets/kuani-mascot.png"
+
+3. Reemplaza el nombre del archivo:
+
+   ANTES: <img src="./assets/logo-chroma.png"
+   DESPUÉS: <img src="./assets/nuevo-logo.png"
+
+4. Guarda (Ctrl+S)
+5. Refresca el preview
+
+
+═══════════════════════════════════════════════════════════════════
+🔍 UBICACIÓN EXACTA DE CADA IMAGEN EN EL CÓDIGO
+═══════════════════════════════════════════════════════════════════
+
+IMAGEN 1: LOGO EN HEADER
+──────────────────────────────────────────────────────────────────
+Busca línea ~374 (o busca "logo-container"):
+
+    <div class="logo-container">
+        <img src="./assets/logo-chroma.png" alt="Chroma by Fénix Traveler" class="logo-img">
+    </div>
+
+CAMBIA: "./assets/logo-chroma.png"
+POR: "./assets/TU-NUEVO-LOGO.png"
+
+
+IMAGEN 2: KUANI EN LA SECCIÓN "CONOCE A KUANI"
+──────────────────────────────────────────────────────────────────
+Busca línea ~492 (o busca "kuani-intro"):
+
+    <div class="kuani-image">
+        <img src="./assets/kuani-mascot.png" alt="Kuani, tu guía de viaje">
+    </div>
+
+CAMBIA: "./assets/kuani-mascot.png"
+POR: "./assets/TU-NUEVO-KUANI.png"
+
+
+IMAGEN 3: FAVICON (ícono pestaña navegador)
+──────────────────────────────────────────────────────────────────
+Busca línea ~7 (al inicio, en el <head>):
+
+    <link rel="icon" type="image/svg+xml" href="./assets/chroma-icon.svg">
+
+CAMBIA: "./assets/chroma-icon.svg"
+POR: "./assets/nuevo-favicon.png"
+
+NOTA: Si usas PNG en vez de SVG, cambia también:
+type="image/svg+xml" → type="image/png"
+
+
+IMÁGENES 4-6: DESTINOS (fotos de fondo)
+──────────────────────────────────────────────────────────────────
+Busca línea ~413-425 (sección destinos):
+
+<img src="https://images.unsplash.com/photo-1583422409516..." class="destino-image">
+
+Estas son de Unsplash (internet). Para cambiarlas:
+
+OPCIÓN A: Usar tus propias fotos
+1. Sube tu foto a /assets/
+2. Cambia la URL:
+   ANTES: src="https://images.unsplash.com/..."
+   DESPUÉS: src="./assets/mi-foto-playa.jpg"
+
+OPCIÓN B: Buscar otras en Unsplash
+1. Ve a unsplash.com
+2. Busca "beach resort" o "mediterranean town"
+3. Copia la URL de la imagen
+4. Pégala en el src="..."
+
+
+═══════════════════════════════════════════════════════════════════
+⚡ CAMBIO RÁPIDO: SOLO CÓDIGO (sin subir archivo)
+═══════════════════════════════════════════════════════════════════
+
+Si NO quieres subir nueva imagen, puedes usar una que ya está:
+
+EJEMPLO: Quieres usar kuani-flying.png en vez de kuani-mascot.png
+
+1. Abre index.html
+2. Busca: "./assets/kuani-mascot.png"
+3. Reemplaza por: "./assets/kuani-flying.png"
+4. Guarda
+5. Refresca
+
+¡No necesitas subir nada! Ya está en /assets/
+
+
+═══════════════════════════════════════════════════════════════════
+🎨 CÓDIGO COMPLETO PARA COPIAR/PEGAR
+═══════════════════════════════════════════════════════════════════
+
+Si quieres cambiar TODAS las imágenes de una vez, busca estas líneas
+en index.html y cámbialas:
+
+────────────────────────────────────────────────────────────────
+LÍNEA ~7 - FAVICON
+────────────────────────────────────────────────────────────────
+<link rel="icon" type="image/png" href="./assets/TU-FAVICON.png">
+
+────────────────────────────────────────────────────────────────
+LÍNEA ~374 - LOGO HEADER
+────────────────────────────────────────────────────────────────
+<img src="./assets/TU-LOGO.png" alt="Chroma by Fénix Traveler" class="logo-img">
+
+────────────────────────────────────────────────────────────────
+LÍNEA ~413 - FOTO DESTINO 1 (Sitges)
+────────────────────────────────────────────────────────────────
+<img src="./assets/destino-sitges.jpg" alt="Sitges, España" class="destino-image">
+
+────────────────────────────────────────────────────────────────
+LÍNEA ~421 - FOTO DESTINO 2 (Mykonos)
+────────────────────────────────────────────────────────────────
+<img src="./assets/destino-mykonos.jpg" alt="Mykonos, Grecia" class="destino-image">
+
+────────────────────────────────────────────────────────────────
+LÍNEA ~429 - FOTO DESTINO 3 (Puerto Vallarta)
+────────────────────────────────────────────────────────────────
+<img src="./assets/destino-vallarta.jpg" alt="Puerto Vallarta, México" class="destino-image">
+
+────────────────────────────────────────────────────────────────
+LÍNEA ~492 - KUANI MASCOTA
+────────────────────────────────────────────────────────────────
+<img src="./assets/TU-KUANI.png" alt="Kuani, tu guía de viaje">
+
+
+═══════════════════════════════════════════════════════════════════
+📝 TIPS IMPORTANTES
+═══════════════════════════════════════════════════════════════════
+
+✓ Los nombres de archivo NO deben tener espacios
+  ❌ "mi logo nuevo.png"
+  ✅ "mi-logo-nuevo.png" o "miLogoNuevo.png"
+
+✓ Pon atención a mayúsculas/minúsculas
+  ❌ Logo.PNG (si el archivo es logo.png)
+  ✅ logo.png
+
+✓ La ruta siempre empieza con "./assets/"
+  ❌ "logo.png"
+  ❌ "assets/logo.png"
+  ✅ "./assets/logo.png"
+
+✓ Formatos de imagen aceptados:
+  ✅ .png (recomendado para logos con transparencia)
+  ✅ .jpg (recomendado para fotos)
+  ✅ .svg (recomendado para íconos)
+  ✅ .webp (más ligero pero menos compatible)
+
+
+═══════════════════════════════════════════════════════════════════
+🔧 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════
+
+PROBLEMA: "Cambié el código pero no se ve la nueva imagen"
+SOLUCIÓN:
+1. Verifica que subiste el archivo a /assets/
+2. Verifica que el nombre sea EXACTO (con extensión)
+3. Haz "hard refresh": Ctrl+Shift+R (o Cmd+Shift+R en Mac)
+4. Si estás en móvil, cierra y vuelve a abrir Replit
+
+PROBLEMA: "La imagen se ve pixelada"
+SOLUCIÓN:
+1. Sube una versión en mayor resolución
+2. Para logo: mínimo 800x300px
+3. Para Kuani: mínimo 600x800px
+4. Para destinos: mínimo 1200x800px
+
+PROBLEMA: "El logo es muy grande/pequeño"
+SOLUCIÓN:
+En el CSS (línea ~327), cambia:
+
+    .logo-img {
+        height: 50px;  ← Cambia este número
+        width: auto;
+    }
+
+Prueba con 40px, 60px, 80px hasta que se vea bien
+
+PROBLEMA: "Kuani es muy grande en su sección"
+SOLUCIÓN:
+En el CSS (línea ~564), cambia:
+
+    .kuani-image img {
+        width: 100%;
+        max-width: 400px;  ← Cambia este número
+        height: auto;
+    }
+
+Prueba con 300px, 500px, 600px
+
+
+═══════════════════════════════════════════════════════════════════
+✅ CHECKLIST DESPUÉS DE CAMBIAR
+═══════════════════════════════════════════════════════════════════
+
+Después de hacer los cambios, verifica:
+
+☐ El logo se ve bien en el header
+☐ El favicon cambió en la pestaña del navegador
+☐ Las fotos de destinos se cargaron
+☐ Kuani se ve en su sección
+☐ Todo se ve bien en móvil (cambia tamaño de ventana)
+☐ No hay imágenes rotas (símbolo 🖼️❌)
+
+
+═══════════════════════════════════════════════════════════════════
+🚀 CAMBIO EXPRESS (30 segundos)
+═══════════════════════════════════════════════════════════════════
+
+Si solo quieres cambiar UNA imagen rápidamente:
+
+1. Sube tu imagen a /assets/
+2. Anótate el nombre exacto: ej. "logo-nuevo.png"
+3. En index.html, Ctrl+F (buscar)
+4. Busca el nombre de la imagen vieja
+5. Reemplázalo por el nuevo
+6. Ctrl+S (guardar)
+7. Refresca preview
+8. ¡Listo!
+
+
+═══════════════════════════════════════════════════════════════════
+
+¿Cuál imagen quieres cambiar específicamente?
+Te doy las instrucciones exactas para esa imagen en particular.
+
+═══════════════════════════════════════════════════════════════════

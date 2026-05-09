@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-P2MTNY41BQ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-P2MTNY41BQ');
+    </script>
+    
+    <!-- Google AdSense - Will be loaded conditionally based on route -->
+    <script>
+      (function() {
+        var excludedPaths = ['/contacto', '/reservaciones', '/checkout', '/cotizacion'];
+        var path = window.location.pathname;
+        var isExcluded = excludedPaths.some(function(p) { return path === p; }) ||
+                         path.includes('/reserva/') || path.includes('/pago/');
+        if (!isExcluded) {
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9377043040912794';
+          s.crossOrigin = 'anonymous';
+          document.head.appendChild(s);
+        }
+      })();
+    </script>
+    
+    <!-- Metricool Tracking -->
+    <script>function loadScript(a){var b=document.getElementsByTagName("head")[0],c=document.createElement("script");c.type="text/javascript",c.src="https://tracker.metricool.com/resources/be.js",c.onreadystatechange=a,c.onload=a,b.appendChild(c)}loadScript(function(){beTracker.t({hash:"fdeda5c83611e34c4c6473b79098a2de"})});</script>
+    
+    <meta charset="UTF-8" />
+    <meta name="google-adsense-account" content="ca-pub-9377043040912794">
+    <!-- CSP will be added when HTTPS is configured -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+    <meta name="description" content="Chroma Travel Boutique - Viaja con libertad. Experiencias de viaje exclusivas y seguras diseñadas para la comunidad LGBT+. Hoteles verificados, destinos inclusivos y asesoría personalizada." />
+    <meta name="keywords" content="viajes LGBT, hoteles gay friendly, turismo inclusivo, vacaciones LGBT, viajes seguros, destinos LGBT friendly" />
+    <meta name="author" content="Chroma Travel Boutique" />
+    <meta name="theme-color" content="#003A70" />
+    
+    <meta property="og:title" content="Chroma Travel Boutique - Viajes LGBT+ Premium" />
+    <meta property="og:description" content="Experiencias de viaje exclusivas y seguras diseñadas para la comunidad LGBT+. Viaja con libertad." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:locale:alternate" content="en_US" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Chroma Travel Boutique - Viajes LGBT+ Premium" />
+    <meta name="twitter:description" content="Experiencias de viaje exclusivas y seguras para la comunidad LGBT+" />
+    
+    <!-- Canonical URL - SEO: Single domain without www -->
+    <link rel="canonical" href="https://chromatravel.online" />
+    
+    <title>Chroma Travel Boutique | Viajes LGBT+ Premium</title>
+    
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

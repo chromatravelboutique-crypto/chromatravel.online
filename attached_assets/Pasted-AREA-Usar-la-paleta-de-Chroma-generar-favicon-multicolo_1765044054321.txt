@@ -1,0 +1,115 @@
+AREA: Usar la paleta de Chroma, generar favicon multicolor y configurar las fuentes recomendadas. Entregar archivos listos para web y ejemplo de integración en HTML/CSS y Tailwind.
+
+1) PALETA (usar exactamente estos hex)
+--chroma-emerald: #00A878;
+--chroma-magenta:  #9B1B9D;
+--chroma-gold:     #FFC72C;
+--chroma-indigo:   #003A70;
+--chroma-coral:    #FF4632;
+--chroma-gray:     #2A2A2A;
+
+2) FONTS (Google Fonts)
+- Heading: Poppins (weights 500, 700)
+- Body: Inter (weights 300, 400, 600)
+
+Incluir en <head> (HTML):
+<link rel="preconnect" href="https://fonts.googleapis.com  ">
+<link rel="preconnect" href="https://fonts.gstatic.com  " crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter  :wght@300;400;600&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+
+3) ARCHIVOS A CREAR (entregar en /public o /static)
+- /public/favicon.svg        -> SVG vector del favicon (multicolor, mano blanca)
+- /public/favicon-16.png
+- /public/favicon-32.png
+- /public/apple-touch-icon.png (180x180)
+- /public/site.webmanifest (con iconos)
+- /src/styles/colors.css     -> CSS con variables de color
+- /src/styles/fonts.css      -> CSS con reglas de fuente y clases utilitarias
+- /tailwind.config.js        -> configuración con colores añadidos
+
+4) INSTRUCCIONES PARA EL FAVICON (especificación exacta)
+- Tamaño base SVG: 128x128 viewBox
+- Fondo: círculo dividido en 5 sectores (arcos) en sentido horario con los 5 colores de la paleta (emerald → magenta → gold → indigo → coral).
+- Centro: silueta de **mano** simple (mano estilizada, sin detalles, relleno blanco) centrada y escalada para cubrir ~56% del diámetro.
+- Bordes limpios, sin stroke negro.
+- Exportar en SVG y generar PNGs en 16x16 y 32x32 y 180x180 y 512x512.
+
+PSEUDOCOMANDOS para generar PNGs (en Replit/Node):
+# instalar sharp
+npm install sharp
+# convertir
+node -e "const sharp = require('sharp'); sharp('public/favicon.svg').resize(16).png().toFile('public/favicon-16.png')"
+
+5) EJEMPLOS DE ARCHIVOS (copiar/pegar)
+
+A) /src/styles/colors.css
+:root{
+  --chroma-emerald: #00A878;
+  --chroma-magenta:  #9B1B9D;
+  --chroma-gold:     #FFC72C;
+  --chroma-indigo:   #003A70;
+  --chroma-coral:    #FF4632;
+  --chroma-gray:     #2A2A2A;
+}
+
+B) /src/styles/fonts.css
+body{ font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:var(--chroma-gray); }
+h1,h2,h3{ font-family: "Poppins", "Inter", system-ui; }
+
+.small-cta{ background: linear-gradient(90deg,var(--chroma-gold),var(--chroma-coral)); color:#111; padding:.5rem 1rem; border-radius:8px; }
+
+C) /public/site.webmanifest (mínimo)
+{
+  "name": "Chroma Travel Boutique",
+  "short_name": "Chroma",
+  "icons":[
+    {"src":"/favicon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"/favicon-512.png","sizes":"512x512","type":"image/png"}
+  ],
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#ffffff",
+  "theme_color":"#003A70"
+}
+
+D) Snippet <head> para integrar todo
+<meta name="theme-color" content="#003A70">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Inter  :wght@300;400;600&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/styles/colors.css">
+<link rel="stylesheet" href="/src/styles/fonts.css">
+
+6) TAILWIND (si aplica) añadir colores en tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        chroma: {
+          emerald: '#00A878',
+          magenta: '#9B1B9D',
+          gold: '#FFC72C',
+          indigo: '#003A70',
+          coral: '#FF4632',
+          gray: '#2A2A2A'
+        }
+      }
+    }
+  }
+}
+
+7) ENTREGA (comprobar)
+- /public/favicon.svg carga y se ve en navegador.
+- PNGs generados y referenciados en <head>.
+- variables CSS cargan correctamente (inspeccionar :root).
+- Fuentes cargan desde Google y se aplican a headings y body.
+- Proveer link al proyecto Replit con carpeta /public y /src listos.
+
+8) TAREAS OPCIONALES (si puedes)
+- Generar versión alternativa del favicon (fondo claro con mano oscura).
+- Proveer SVG optimizado con svgo.
+- Incluir small animated variant (SVG with simple scale/pulse) para hero header.
+
+FIN.  
+Entrega clara: subir a repo en Replit con los archivos listados y confirmar con enlace público de demo.

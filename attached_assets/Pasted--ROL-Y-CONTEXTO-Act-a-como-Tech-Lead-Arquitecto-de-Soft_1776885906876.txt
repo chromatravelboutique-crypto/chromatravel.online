@@ -1,0 +1,45 @@
+# ROL Y CONTEXTO
+Actúa como Tech Lead & Arquitecto de Software especializado en OTAs, sistemas de reservas en tiempo real, pasarelas de pago mexicanas (Clip) y escalabilidad B2C → B2B. 
+Trabajamos con dos sitios en producción: `fenixtraveler.com` y `chromatravel.online`. El objetivo es integrar un módulo OTA B2C sobre un inventario de bloqueos hoteleros 2026, preparado para escalar a B2B sin reescribir código.
+
+# INSTRUCCIONES DE AUDITORÍA
+1. Escanea la estructura actual del repositorio/proyecto.
+2. Para cada módulo listado abajo, verifica si ya existe código funcional.
+   - Si ✅ EXISTE: Revisa cumplimiento de specs, optimiza rendimiento, añade logs/métricas, y documenta brevemente.
+   - Si ❌ NO EXISTE: Implementa desde cero siguiendo las especificaciones técnicas.
+3. Registra hallazgos en formato tabla antes de generar código.
+4. NUNCA modifiques rutas, archivos de configuración ni lógica existente de `fenixtraveler.com` y `chromatravel.online`. Trabaja en carpetas aisladas (`/src/modules/ota-b2c`, `/src/lib/booking-engine`, `/src/components/blocks`, `/src/webhooks/clip`, etc.).
+5. Prioriza seguridad, idempotencia, atomicidad y compliance (PCI-DSS vía Clip, LFPDPPP, GDPR).
+
+# MÓDULOS A AUDITAR / IMPLEMENTAR
+| Módulo | Especificaciones Técnicas | Criterio de Aceptación |
+|--------|---------------------------|------------------------|
+| **1. Ingesta de Inventario** | Parser para CSV/XLSX/PDF (`papaparse`, `xlsx`, `pdf-parse`/AWS Textract). Normaliza fechas `DD/MM/YYYY`, valida columnas, hace `UPSERT` atómico en PostgreSQL. Etiqueta `provider`. Genera `inventory_logs`. | Tabla `blocks` poblada, logs de sync, endpoint `/admin/upload-inventory` con validación Zod. |
+| **2. Motor de Precios (Calculadora)** | React/Next.js 14 + TS. Inputs: adultos, edades menores, bloqueo seleccionado. Lógica: SGL/DBL/TPL/QDP, políticas de menores (`GRATIS`, `2x1`, rangos con costo). Desglose en tiempo real. | Componente `<PriceCalculator />` funcional, sin re-renders innecesarios, exporta `breakdown` y `total`. |
+| **3. Reglas de Anticipo & Pago** | Función `calculateDeposit(checkInDate, totalCost)`: <20 días → 100%, 25-45 → 40%, ≥60 → 20%. Todos NO REEMBOLSABLES. Saldo restante con recordatorio WhatsApp/Email. | Endpoint `/api/calculate-deposit` probado, integración con flujo de checkout. |
+| **4. Anti-Sobreventa** | Redis lock `lock:block:{id}:{userId}` TTL 600s. Decremento atómico `UPDATE blocks SET sold = sold + 1 WHERE id = $1 AND (initial - sold) > 0`. Rollback si pago falla o expira lock. | Transacciones DB verificadas, idempotencia en checkout, manejo de concurrencia documentado. |
+| **5. CRM & Kuani Points** | Registro por WhatsApp/Email único. `customer_id` generado. Puntos: 1 Kuani = $100 MXN depositados. Bonus cumpleaños ±7 días = +50 pts. Tablas: `users`, `kuani_points`, `points_transactions`. | Registro/login funcional, cálculo de puntos correcto, endpoints `/api/crm/*` con cache Redis. |
+| **6. Integración Clip (Pagos)** | Crear sesión `POST /v2/charges` (monto en centavos, MXN). Webhook firmado `x-clip-signature` (HMAC-SHA256). Actualizar `reservations.status = CONFIRMED`, generar voucher PDF, notificar WhatsApp. | Webhook verificado, estado de reserva sincronizado, voucher descargable, logs de transacción. |
+| **7. Iframe para Redes Sociales** | Endpoint `/api/share/{blockId}` → HTML/CSS responsive con OG tags (`og:title`, `og:image`, `og:url`). Compatible con Facebook/WhatsApp. Filtros: mes, destino, hotel. | URL pública compartible, preview en Facebook Debugger, layout mobile-first, sin CORS bloqueado. |
+| **8. Panel Admin B2C/B2B** | Upload UI, métricas de ventas, stock en tiempo real (WebSockets/Redis PubSub), toggle `role: agency` (tarifas netas + comisión configurable). | Dashboard funcional, roles RBAC, actualizaciones en vivo, listo para escalar B2B. |
+
+# REGLAS DE IMPLEMENTACIÓN
+- Stack: Next.js 14 (App Router) + TypeScript + Tailwind + PostgreSQL + Prisma/Drizzle + Redis.
+- Validación: Zod en inputs y payloads.
+- Pagos: Clip maneja tarjeta (PCI-DSS cubierto). Tu backend solo almacena `payment_id`, `status`, `amount`.
+- Webhooks: Verificar firma, reintentos con exponential backoff, idempotencia por `idempotency_key`.
+- Iframe: Respetar CSP de Facebook/Instagram. Usar `sandbox="allow-scripts allow-same-origin"` si es necesario.
+- CI/CD: GitHub Actions para test, lint, build, deploy a staging/production.
+- Documentación: `README.md` con variables de entorno, scripts de instalación, diagrama ERD, checklist de despliegue.
+
+# FORMATO DE ENTREGA ESPERADO
+Por favor, responde en este orden:
+1. 📊 Tabla de auditoría (Módulo | Estado | Acción | Notas)
+2. 🛠️ Para cada módulo ❌ o ⚠️: 
+   - Ruta del archivo a crear/modificar
+   - Código completo (TypeScript/Next.js/SQL/Config)
+   - Pruebas/verificación (`curl`, `node --test`, Prisma migration)
+3. 🔐 Checklist de seguridad & compliance
+4. 🚀 Pasos para deploy en staging sin afectar producción
+
+Comienza con la auditoría. Si detectas ambigüedad en alguna regla, pregúntala antes de asumir. Mantén el código modular, tipado y listo para producción.
