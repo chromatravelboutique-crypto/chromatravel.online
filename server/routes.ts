@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { registerOtaB2cRoutes } from "./ota-b2c-routes";
-import { calcularPrecioBloqueo } from "@shared/pricing-engine";
+import { calcularPrecioBloqueo, type KuaniTier } from "@shared/pricing-engine";
 import { storage } from "./storage";
 import { insertLeadSchema, insertBookingSchema, insertUserSchema, searchFiltersSchema, loginSchema } from "@shared/schema";
 import { z } from "zod";
@@ -724,7 +724,7 @@ export async function registerRoutes(
         const kuaniTierRaw = (bloqueo.tipo_habitacion as string || '').toUpperCase();
         const kuaniTier = (['PREMIUM PLUS', 'PREMIUM', 'LUXURY'].includes(kuaniTierRaw)
           ? kuaniTierRaw
-          : kuaniTierRaw.includes('PREMIUM') ? 'PREMIUM' : 'ESTANDAR') as import('@shared/pricing-engine').KuaniTier;
+          : kuaniTierRaw.includes('PREMIUM') ? 'PREMIUM' : 'ESTANDAR') as KuaniTier;
         const pricing = calcularPrecioBloqueo({
           precioHabitacion: totalPrice,
           adultos: data.adults,
