@@ -4,7 +4,7 @@
  */
 import { sendEmail } from '../email-service';
 
-const WA_ADMIN = process.env.ADMIN_WHATSAPP || process.env.ADMIN_PHONE || '+524434044104';
+const WA_ADMIN = process.env.ADMIN_WHATSAPP || process.env.ADMIN_PHONE || '';
 const CALLMEBOT_KEY = process.env.CALLMEBOT_API_KEY || '';
 
 async function sendCallmebot(phone: string, message: string): Promise<boolean> {
