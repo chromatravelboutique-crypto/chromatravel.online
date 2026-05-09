@@ -7,6 +7,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { initializeAutomationJobs } from "./jobs/automation.jobs";
 import { startCleanupJob } from "./jobs/cleanup-bloqueos";
+import { startHoldExpiryJob } from "./jobs/hold-expiry";
 import { createServer } from "http";
 import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
@@ -70,8 +71,34 @@ export function log(message: string, source = "express") {
   // Enable Gzip/Brotli compression for all responses
   app.use(compression());
 
+  // ── Rate limiting — protege endpoints públicos contra abuso ─────────────────
+  const { default: rateLimit } = await import("express-rate-limit");
+  const publicLimiter = rateLimit({
+    windowMs: 60 * 1000,     // 1 minuto
+    max: 60,                 // 60 req/min por IP en endpoints públicos generales
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Demasiadas solicitudes. Intenta en un momento." },
+  });
+  const strictLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,                 // 10 req/min para endpoints de reservas/leads/pagos
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Límite de solicitudes alcanzado. Intenta en un momento." },
+  });
+  app.use("/api/reservar-precompra", strictLimiter);
+  app.use("/api/leads",              strictLimiter);
+  app.use("/api/reservas",           strictLimiter);
+  app.use("/api/payments",           strictLimiter);
+  app.use("/api/tarifas-especiales", publicLimiter);
+  app.use("/api/hotels",             publicLimiter);
+
+  // Start hold expiry job (libera habitaciones de holds expirados cada 5 min)
+  startHoldExpiryJob();
+
   // Domain redirect handled by Cloudflare Page Rule (apex → www)
-  
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   

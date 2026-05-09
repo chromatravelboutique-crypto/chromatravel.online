@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { registerOtaB2cRoutes } from "./ota-b2c-routes";
+import { calcularPrecioBloqueo } from "@shared/pricing-engine";
 import { storage } from "./storage";
 import { insertLeadSchema, insertBookingSchema, insertUserSchema, searchFiltersSchema, loginSchema } from "@shared/schema";
 import { z } from "zod";
@@ -423,7 +424,8 @@ export async function registerRoutes(
       const hotel = req.query.hotel as string | undefined;
       const diversify = req.query.diversify === "true";
 
-      const baseWhere = "WHERE estado = 'Activo' AND fecha_inicio >= '2026-05-11'";
+      const today = new Date().toISOString().split("T")[0];
+      const baseWhere = `WHERE estado = 'Activo' AND fecha_inicio >= '${today}'`;
       let whereClause = baseWhere;
       const params: any[] = [];
       let paramIdx = 1;
@@ -715,6 +717,64 @@ export async function registerRoutes(
 
         await client.query('COMMIT');
 
+        // Calcular precios con el motor oficial (no hardcoded)
+        const noches = Math.max(1, Math.ceil(
+          (new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / 86400000
+        ));
+        const kuaniTierRaw = (bloqueo.tipo_habitacion as string || '').toUpperCase();
+        const kuaniTier = (['PREMIUM PLUS', 'PREMIUM', 'LUXURY'].includes(kuaniTierRaw)
+          ? kuaniTierRaw
+          : kuaniTierRaw.includes('PREMIUM') ? 'PREMIUM' : 'ESTANDAR') as import('@shared/pricing-engine').KuaniTier;
+        const pricing = calcularPrecioBloqueo({
+          precioHabitacion: totalPrice,
+          adultos: data.adults,
+          menores: data.children,
+          juniors: data.juniors,
+          infantes: data.infants,
+          noches,
+          kuaniTier,
+        });
+
+        // Crear reserva real con hold de 30 min
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+        const reservaResult = await (async () => {
+          try {
+            const { db } = await import("./db");
+            const { reservas } = await import("@shared/schema");
+            const [reserva] = await db.insert(reservas).values({
+              brandId:                (req as any).brand?.id ?? null,
+              hotel:                  data.hotel,
+              tipoHabitacion:         data.roomType,
+              checkIn:                data.checkIn.split('T')[0],
+              checkOut:               data.checkOut.split('T')[0],
+              habitacionesReservadas: roomsNeeded,
+              bloqueoId:              String(bloqueo.id),
+              guestName:              data.name,
+              guestEmail:             data.email,
+              guestPhone:             data.phone ?? null,
+              adults:                 data.adults,
+              children:               data.children,
+              juniors:                data.juniors,
+              infants:                data.infants,
+              tarifaPublicaTotal:     String(pricing.tarifaPublicaTotal),
+              precioVenta:            String(pricing.precioVenta),
+              precioTarjeta:          String(pricing.precioTarjeta),
+              depositPercent:         deposit.percent,
+              depositAmount:          String(depositAmount),
+              kuaniGenerados:         pricing.kuaniGenerados,
+              status:                 "hold",
+              expiresAt,
+              reference:              lead.id.substring(0, 8).toUpperCase(),
+              comments:               data.comments ?? null,
+              ipAddress:              (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim(),
+            }).returning();
+            return reserva;
+          } catch (err) {
+            console.error('[Precompra] reserva insert failed (non-fatal):', err);
+            return null;
+          }
+        })();
+
         const leadData = {
           name: data.name,
           email: data.email,
@@ -825,10 +885,10 @@ export async function registerRoutes(
             juniors: data.juniors,
             infantes: data.infants,
             distribucion: `${roomsNeeded} hab.`,
-            totalEfectivo: `$${totalPrice.toLocaleString()} MXN`,
-            totalTarjeta: `$${Math.round(totalPrice * 1.036).toLocaleString()} MXN`,
+            totalEfectivo: `$${pricing.precioVenta.toLocaleString()} MXN`,
+            totalTarjeta: `$${pricing.precioTarjeta.toLocaleString()} MXN`,
             anticipo: `$${depositAmount.toLocaleString()} MXN (${deposit.percent}%)`,
-            kuaniGenerados: Math.floor(totalPrice * 0.019),
+            kuaniGenerados: pricing.kuaniGenerados,
             leadId: 0,
             diasAlCheckIn: daysToCI,
           });
@@ -839,7 +899,16 @@ export async function registerRoutes(
         res.status(201).json({
           success: true,
           leadId: lead.id,
+          reservaId: reservaResult?.id ?? null,
           reference: ref,
+          expiresAt: expiresAt.toISOString(),
+          pricing: {
+            precioVenta:    pricing.precioVenta,
+            precioTarjeta:  pricing.precioTarjeta,
+            depositPercent: deposit.percent,
+            depositAmount,
+            kuaniGenerados: pricing.kuaniGenerados,
+          },
           message: "Cotizacion enviada exitosamente",
         });
       } catch (txError) {
@@ -937,7 +1006,27 @@ export async function registerRoutes(
   app.post("/api/bookings", async (req, res) => {
     try {
       const bookingData = insertBookingSchema.parse(req.body);
-      const booking = await storage.createBooking(bookingData);
+
+      // Validar precio contra la tarifa real en la DB — previene manipulación frontend
+      if (bookingData.rateId) {
+        const rate = await storage.getRate(bookingData.rateId);
+        if (rate) {
+          const checkIn  = new Date(bookingData.checkIn);
+          const checkOut = new Date(bookingData.checkOut);
+          const nights   = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86400000));
+          const expected = Math.round(Number(rate.price) * nights * 100) / 100;
+          const submitted = Math.round(Number(bookingData.totalPrice) * 100) / 100;
+          if (Math.abs(submitted - expected) > 1) {
+            return res.status(400).json({ message: "Price mismatch — recalculate from current rate" });
+          }
+        }
+      }
+
+      const confirmationCode = `CHR-${Array.from({ length: 6 }, () =>
+        'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
+      ).join('')}`;
+
+      const booking = await storage.createBooking({ ...bookingData, confirmationCode } as any);
       res.status(201).json(booking);
     } catch (error) {
       console.error("Error creating booking:", error);
@@ -988,9 +1077,114 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // RESERVAS API — hold/release state machine
+  // ============================================
+
+  app.get("/api/reservas/:id", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { reservas } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [reserva] = await db.select().from(reservas).where(eq(reservas.id, req.params.id)).limit(1);
+      if (!reserva) return res.status(404).json({ message: "Reserva no encontrada" });
+      const now = new Date();
+      if (reserva.status === "hold" && reserva.expiresAt && new Date(reserva.expiresAt) < now) {
+        return res.json({ ...reserva, status: "expired", timeLeft: 0 });
+      }
+      const timeLeft = reserva.expiresAt
+        ? Math.max(0, Math.round((new Date(reserva.expiresAt).getTime() - now.getTime()) / 1000))
+        : null;
+      res.json({ ...reserva, timeLeft });
+    } catch (err) {
+      res.status(500).json({ message: "Error consultando reserva" });
+    }
+  });
+
+  app.post("/api/reservas/:id/cancel", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { reservas } = await import("@shared/schema");
+      const { eq, and, inArray } = await import("drizzle-orm");
+      const { getPool } = await import("./db");
+      const pool = getPool();
+
+      const [reserva] = await db.select().from(reservas).where(eq(reservas.id, req.params.id)).limit(1);
+      if (!reserva) return res.status(404).json({ message: "Reserva no encontrada" });
+      if (!["hold", "pending_payment"].includes(reserva.status)) {
+        return res.status(400).json({ message: `No se puede cancelar: estado actual es '${reserva.status}'` });
+      }
+
+      // Restaurar inventario y marcar como cancelada atómicamente
+      if (pool) {
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          await client.query(
+            `UPDATE bloqueos SET habitaciones_disponibles = habitaciones_disponibles + $1
+             WHERE hotel = $2 AND tipo_habitacion = $3 AND fecha_inicio = $4 AND fecha_fin = $5`,
+            [reserva.habitacionesReservadas, reserva.hotel, reserva.tipoHabitacion, reserva.checkIn, reserva.checkOut]
+          );
+          await db.update(reservas)
+            .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+            .where(eq(reservas.id, reserva.id));
+          await client.query("COMMIT");
+        } catch (err) {
+          await client.query("ROLLBACK");
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+      res.json({ success: true, message: "Reserva cancelada e inventario restaurado" });
+    } catch (err) {
+      console.error("[reservas/cancel]", err);
+      res.status(500).json({ message: "Error cancelando reserva" });
+    }
+  });
+
+  app.post("/api/reservas/:id/confirm", async (req, res) => {
+    try {
+      const { paymentMethod, paymentIntentId } = req.body;
+      if (!paymentMethod) return res.status(400).json({ message: "paymentMethod requerido" });
+
+      const { db } = await import("./db");
+      const { reservas } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [reserva] = await db.select().from(reservas).where(eq(reservas.id, req.params.id)).limit(1);
+      if (!reserva) return res.status(404).json({ message: "Reserva no encontrada" });
+      if (reserva.status === "expired" || (reserva.expiresAt && new Date(reserva.expiresAt) < new Date())) {
+        return res.status(410).json({ message: "La reserva expiró. Inicia una nueva cotización." });
+      }
+      if (reserva.status === "confirmed") return res.json({ success: true, reserva });
+      if (reserva.status !== "hold" && reserva.status !== "pending_payment") {
+        return res.status(400).json({ message: `No se puede confirmar: estado '${reserva.status}'` });
+      }
+
+      const confirmationCode = `RES-${Array.from({ length: 8 }, () =>
+        'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
+      ).join('')}`;
+
+      const [updated] = await db.update(reservas).set({
+        status: "confirmed",
+        paymentMethod,
+        paymentIntentId: paymentIntentId ?? null,
+        confirmationCode,
+        confirmedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(reservas.id, reserva.id)).returning();
+
+      res.json({ success: true, confirmationCode, reserva: updated });
+    } catch (err) {
+      console.error("[reservas/confirm]", err);
+      res.status(500).json({ message: "Error confirmando reserva" });
+    }
+  });
+
+  // ============================================
   // LEADS API
   // ============================================
-  
+
   app.post("/api/leads", async (req, res) => {
     try {
       const rawData = req.body;
@@ -1374,6 +1568,135 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching bookings:", error);
       res.status(500).json({ message: "Error fetching bookings" });
+    }
+  });
+
+  // ── ERP DASHBOARD — métricas reales de inventario y revenue ─────────────────
+  app.get("/api/admin/erp/dashboard", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { getPool } = await import("./db");
+      const { db: ormDb } = await import("./db");
+      const { reservas: reservasTable } = await import("@shared/schema");
+      const { count, sum, sql: sqlExpr, eq, and, gte, lt, inArray } = await import("drizzle-orm");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB not available" });
+
+      const now = new Date();
+      const todayStr = now.toISOString().split("T")[0];
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+
+      // Inventario: totales de bloqueos activos
+      const inventoryResult = await pool.query(`
+        SELECT
+          COUNT(*)                                       AS total_bloqueos,
+          SUM(habitaciones_disponibles)                  AS habitaciones_disponibles,
+          SUM(COALESCE(habitaciones_totales, 0))         AS habitaciones_totales,
+          COUNT(*) FILTER (WHERE habitaciones_disponibles = 0) AS bloqueos_agotados,
+          COUNT(*) FILTER (WHERE fecha_inicio = $1)      AS check_ins_hoy
+        FROM bloqueos
+        WHERE estado = 'Activo' AND fecha_inicio >= $1
+      `, [todayStr]);
+
+      // Hoteles con más disponibilidad
+      const topHotelsResult = await pool.query(`
+        SELECT hotel,
+               SUM(habitaciones_disponibles) AS disponibles,
+               MIN(tarifa_doble)::numeric     AS precio_desde,
+               COUNT(*)                       AS bloqueos_activos
+        FROM bloqueos
+        WHERE estado = 'Activo' AND fecha_inicio >= $1
+        GROUP BY hotel
+        ORDER BY disponibles DESC
+        LIMIT 10
+      `, [todayStr]);
+
+      // Reservas por estado
+      const reservaStats = await ormDb
+        .select({ status: reservasTable.status, total: count() })
+        .from(reservasTable)
+        .groupBy(reservasTable.status);
+
+      // Revenue de reservas confirmadas este mes
+      const revenueResult = await ormDb
+        .select({
+          totalVenta:   sqlExpr<number>`COALESCE(SUM(precio_venta::numeric), 0)`,
+          totalTarjeta: sqlExpr<number>`COALESCE(SUM(precio_tarjeta::numeric), 0)`,
+          totalDeposit: sqlExpr<number>`COALESCE(SUM(deposit_amount::numeric), 0)`,
+          count:        count(),
+        })
+        .from(reservasTable)
+        .where(
+          and(
+            eq(reservasTable.status, "confirmed"),
+            gte(reservasTable.createdAt, new Date(monthStart))
+          )
+        );
+
+      // Holds activos en riesgo de expirar en los próximos 10 min
+      const expiringSoon = await ormDb
+        .select({ id: reservasTable.id, hotel: reservasTable.hotel, expiresAt: reservasTable.expiresAt })
+        .from(reservasTable)
+        .where(
+          and(
+            eq(reservasTable.status, "hold"),
+            lt(reservasTable.expiresAt, new Date(now.getTime() + 10 * 60 * 1000))
+          )
+        );
+
+      // Leads del mes
+      const leadsResult = await pool.query(`
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE status = 'hot')  AS hot,
+               COUNT(*) FILTER (WHERE status = 'warm') AS warm
+        FROM leads
+        WHERE created_at >= $1
+      `, [monthStart]);
+
+      const inv = inventoryResult.rows[0];
+      const rev = revenueResult[0];
+      const reservasByStatus = Object.fromEntries(reservaStats.map(r => [r.status, r.total]));
+      const leads = leadsResult.rows[0];
+
+      res.json({
+        timestamp: now.toISOString(),
+        inventario: {
+          bloqueos_activos:    Number(inv.total_bloqueos),
+          habitaciones_disp:   Number(inv.habitaciones_disponibles),
+          habitaciones_total:  Number(inv.habitaciones_totales),
+          bloqueos_agotados:   Number(inv.bloqueos_agotados),
+          check_ins_hoy:       Number(inv.check_ins_hoy),
+          ocupacion_pct: inv.habitaciones_totales > 0
+            ? Math.round((1 - inv.habitaciones_disponibles / inv.habitaciones_totales) * 100)
+            : null,
+        },
+        top_hoteles: topHotelsResult.rows.map(r => ({
+          hotel:          r.hotel,
+          disponibles:    Number(r.disponibles),
+          precio_desde:   Number(r.precio_desde),
+          bloqueos:       Number(r.bloqueos_activos),
+        })),
+        reservas: {
+          por_estado:    reservasByStatus,
+          holds_activos: reservasByStatus["hold"] ?? 0,
+          confirmadas:   reservasByStatus["confirmed"] ?? 0,
+          expiradas:     reservasByStatus["expired"] ?? 0,
+          expirando_pronto: expiringSoon.length,
+        },
+        revenue_mes: {
+          total_venta:   Number(rev?.totalVenta   ?? 0),
+          total_tarjeta: Number(rev?.totalTarjeta ?? 0),
+          total_deposit: Number(rev?.totalDeposit ?? 0),
+          reservas_conf: Number(rev?.count        ?? 0),
+        },
+        leads_mes: {
+          total: Number(leads.total),
+          hot:   Number(leads.hot),
+          warm:  Number(leads.warm),
+        },
+      });
+    } catch (err) {
+      console.error("[ERP dashboard]", err);
+      res.status(500).json({ message: "Error generando dashboard ERP" });
     }
   });
 

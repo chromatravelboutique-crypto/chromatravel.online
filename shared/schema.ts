@@ -842,6 +842,63 @@ export const whatsappMessagesRelations = relations(whatsappMessages, ({ one }) =
   conversation: one(whatsappConversations, { fields: [whatsappMessages.conversationId], references: [whatsappConversations.id] }),
 }));
 
+// ==================== RESERVAS (Hold → Booking state machine) ====================
+// Inventario propio: bloqueos. Una reserva = hold de N habitaciones con expiración.
+export const reservas = pgTable("reservas", {
+  id:                     varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brandId:                varchar("brand_id").references(() => brands.id),
+  leadId:                 varchar("lead_id").references(() => leads.id),
+
+  // Identificación del bloqueo (raw-SQL table, no FK constraint)
+  bloqueoId:              varchar("bloqueo_id"),
+  hotel:                  text("hotel").notNull(),
+  tipoHabitacion:         text("tipo_habitacion").notNull(),
+  checkIn:                text("check_in").notNull(),
+  checkOut:               text("check_out").notNull(),
+  habitacionesReservadas: integer("habitaciones_reservadas").notNull(),
+
+  // Pasajeros
+  guestName:   text("guest_name").notNull(),
+  guestEmail:  text("guest_email").notNull(),
+  guestPhone:  text("guest_phone"),
+  adults:      integer("adults").notNull(),
+  children:    integer("children").default(0),
+  juniors:     integer("juniors").default(0),
+  infants:     integer("infants").default(0),
+
+  // Precios calculados en el servidor — NUNCA del cliente
+  tarifaPublicaTotal: decimal("tarifa_publica_total", { precision: 10, scale: 2 }).notNull(),
+  precioVenta:        decimal("precio_venta",         { precision: 10, scale: 2 }).notNull(),
+  precioTarjeta:      decimal("precio_tarjeta",       { precision: 10, scale: 2 }).notNull(),
+  depositPercent:     integer("deposit_percent").notNull(),
+  depositAmount:      decimal("deposit_amount",       { precision: 10, scale: 2 }).notNull(),
+  kuaniGenerados:     integer("kuani_generados").default(0),
+
+  // Estado: hold → pending_payment → confirmed | cancelled | expired
+  status:           text("status").notNull().default("hold"),
+  paymentMethod:    text("payment_method"),   // spei | card | paypal
+  paymentIntentId:  text("payment_intent_id"),
+  confirmationCode: text("confirmation_code").unique(),
+
+  // Expiración del hold (default 30 min)
+  expiresAt:    timestamp("expires_at").notNull(),
+  confirmedAt:  timestamp("confirmed_at"),
+  cancelledAt:  timestamp("cancelled_at"),
+
+  reference:  text("reference"),
+  comments:   text("comments"),
+  utmSource:  text("utm_source"),
+  ipAddress:  text("ip_address"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const reservasRelations = relations(reservas, ({ one }) => ({
+  brand: one(brands, { fields: [reservas.brandId], references: [brands.id] }),
+  lead:  one(leads,  { fields: [reservas.leadId],  references: [leads.id]  }),
+}));
+
 // ==================== INSERT SCHEMAS ====================
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
@@ -877,6 +934,7 @@ export const insertWhatsappConversationSchema = createInsertSchema(whatsappConve
 export const insertWhatsappMessageSchema = createInsertSchema(whatsappMessages).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertLeadStatusHistorySchema = createInsertSchema(leadStatusHistory).omit({ id: true, changedAt: true });
+export const insertReservaSchema = createInsertSchema(reservas).omit({ id: true, createdAt: true, updatedAt: true });
 
 // ==================== TYPES ====================
 export type InsertBrand = z.infer<typeof insertBrandSchema>;
@@ -941,6 +999,8 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertLeadStatusHistory = z.infer<typeof insertLeadStatusHistorySchema>;
 export type LeadStatusHistory = typeof leadStatusHistory.$inferSelect;
+export type InsertReserva = z.infer<typeof insertReservaSchema>;
+export type Reserva = typeof reservas.$inferSelect;
 
 export const searchFiltersSchema = z.object({
   destination: z.string().optional(),
