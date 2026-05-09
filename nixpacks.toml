@@ -10,5 +10,3 @@ cmds = ["npm ci --include=dev"]
 [phases.build]
 cmds = ["npm rebuild sharp", "npm run build"]
 
-[start]
-cmd = "npm start"
