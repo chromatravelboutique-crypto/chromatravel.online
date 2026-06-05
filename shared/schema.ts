@@ -1022,6 +1022,22 @@ export const jobQueue = pgTable("job_queue", {
 export type JobQueue = typeof jobQueue.$inferSelect;
 export type InsertJobQueue = typeof jobQueue.$inferInsert;
 
+// Jobs that exhausted all retries land here for manual review.
+// Nothing is deleted automatically — an operator must inspect and either
+// replay (re-insert into job_queue) or discard.
+export const jobDeadLetter = pgTable("job_dead_letter", {
+  id:             varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  originalJobId:  text("original_job_id").notNull(),
+  type:           text("type").notNull(),
+  payload:        jsonb("payload").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  attempts:       integer("attempts").notNull(),
+  lastError:      text("last_error"),
+  failedAt:       timestamp("failed_at").defaultNow(),
+});
+
+export type JobDeadLetter = typeof jobDeadLetter.$inferSelect;
+
 export const searchFiltersSchema = z.object({
   destination: z.string().optional(),
   checkIn: z.string().optional(),

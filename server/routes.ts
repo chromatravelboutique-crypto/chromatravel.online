@@ -3356,20 +3356,72 @@ export async function registerRoutes(
     }
   });
 
-  // Job status endpoint — for polling after async document generation
+  // ── JOB QUEUE ADMIN ENDPOINTS ─────────────────────────────────────────────
+
+  // Poll status of a single job by idempotency key
   app.get("/api/jobs/:idempotencyKey/status", requireAdminRole, async (req, res) => {
     try {
-      const { jobQueue: jq } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
-      const { db: ormDb } = await import("./db");
-      const [job] = await ormDb.select({
-        status:    jq.status,
-        attempts:  jq.attempts,
-        lastError: jq.lastError,
-        updatedAt: jq.updatedAt,
-      }).from(jq).where(eq(jq.idempotencyKey, req.params.idempotencyKey));
+      const { getJobStatus } = await import("./jobs/job-queue");
+      const job = await getJobStatus(req.params.idempotencyKey);
       if (!job) return res.status(404).json({ error: "Job not found" });
       res.json(job);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // List recent jobs with optional status filter
+  // GET /api/admin/jobs?status=failed&limit=50
+  app.get("/api/admin/jobs", requireAdminRole, async (req, res) => {
+    try {
+      const { jobQueue: jq } = await import("@shared/schema");
+      const { desc, eq: drizzleEq } = await import("drizzle-orm");
+      const { db: ormDb } = await import("./db");
+      const limit  = Math.min(100, parseInt(req.query.limit as string) || 50);
+      const status = req.query.status as string | undefined;
+
+      let query = ormDb.select().from(jq).orderBy(desc(jq.createdAt)).limit(limit);
+      if (status) {
+        query = ormDb.select().from(jq).where(drizzleEq(jq.status, status)).orderBy(desc(jq.createdAt)).limit(limit) as any;
+      }
+      const jobs = await query;
+      res.json({ total: jobs.length, jobs });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // List dead-letter jobs
+  // GET /api/admin/jobs/dead-letter
+  app.get("/api/admin/jobs/dead-letter", requireAdminRole, async (req, res) => {
+    try {
+      const { jobDeadLetter: dl } = await import("@shared/schema");
+      const { desc } = await import("drizzle-orm");
+      const { db: ormDb } = await import("./db");
+      const limit = Math.min(100, parseInt(req.query.limit as string) || 50);
+      const jobs = await ormDb.select().from(dl).orderBy(desc(dl.failedAt)).limit(limit);
+      res.json({ total: jobs.length, jobs });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Replay a dead-letter job — re-enqueues it with a new idempotency key
+  // POST /api/admin/jobs/dead-letter/:id/replay
+  app.post("/api/admin/jobs/dead-letter/:id/replay", requireAdminRole, async (req, res) => {
+    try {
+      const { jobDeadLetter: dl } = await import("@shared/schema");
+      const { eq: drizzleEq } = await import("drizzle-orm");
+      const { db: ormDb } = await import("./db");
+      const { enqueueJob } = await import("./jobs/job-queue");
+
+      const [dead] = await ormDb.select().from(dl).where(drizzleEq(dl.id, req.params.id));
+      if (!dead) return res.status(404).json({ error: "Dead-letter job not found" });
+
+      // New idempotency key so it won't collide with the original failed job
+      const newKey = `${dead.idempotencyKey}-replay-${Date.now()}`;
+      const jobId  = await enqueueJob(dead.type, dead.payload as Record<string, unknown>, newKey);
+      res.json({ success: true, newJobId: jobId, newKey });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
