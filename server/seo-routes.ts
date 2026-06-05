@@ -1,13 +1,10 @@
 import type { Express, Request, Response } from "express";
-import { db } from "./db";
-import { destinations, blogPosts, hotels, brands } from "@shared/schema";
+import { getDb } from "./db";
+import { destinations, blogPosts, hotels, brands, hotelBlocks } from "@shared/schema";
 import { eq, and, or, isNull } from "drizzle-orm";
 
 function getDatabase() {
-  if (!db) {
-    throw new Error("Database not available");
-  }
-  return db;
+  return getDb();
 }
 
 // Generate sitemap.xml dynamically based on brand
@@ -260,6 +257,24 @@ export function registerSeoRoutes(app: Express) {
           priority: 0.8,
           changefreq: "weekly"
         });
+      }
+
+      // Own hotel blocks inventory (high priority — own product)
+      try {
+        const allBlocks = await getDatabase()
+          .select({ hotelSlug: hotelBlocks.hotelSlug, updatedAt: hotelBlocks.updatedAt })
+          .from(hotelBlocks)
+          .where(and(eq(hotelBlocks.active, true), eq(hotelBlocks.brandId, brand.id)));
+        for (const block of allBlocks) {
+          pages.push({
+            url: `/bloques/${block.hotelSlug}`,
+            lastmod: block.updatedAt ? new Date(block.updatedAt).toISOString().split('T')[0] : undefined,
+            priority: 0.9,
+            changefreq: "daily",
+          });
+        }
+      } catch (blockError) {
+        console.log("Hotel blocks not available for sitemap");
       }
 
       const sitemap = generateSitemap(baseUrl, pages);
