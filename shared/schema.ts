@@ -1002,6 +1002,26 @@ export type LeadStatusHistory = typeof leadStatusHistory.$inferSelect;
 export type InsertReserva = z.infer<typeof insertReservaSchema>;
 export type Reserva = typeof reservas.$inferSelect;
 
+// ==================== JOB QUEUE ====================
+// Persistent background job queue. Workers poll this table.
+// idempotency_key prevents duplicate effects on retry.
+export const jobQueue = pgTable("job_queue", {
+  id:              varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type:            text("type").notNull(),            // 'send_email' | 'generate_pdf' | 'send_whatsapp'
+  payload:         jsonb("payload").notNull(),
+  status:          text("status").notNull().default("pending"), // pending | processing | done | failed
+  idempotencyKey:  text("idempotency_key").notNull().unique(),  // prevents re-execution
+  attempts:        integer("attempts").notNull().default(0),
+  maxAttempts:     integer("max_attempts").notNull().default(3),
+  lastError:       text("last_error"),
+  processAfter:    timestamp("process_after").defaultNow(),
+  createdAt:       timestamp("created_at").defaultNow(),
+  updatedAt:       timestamp("updated_at").defaultNow(),
+});
+
+export type JobQueue = typeof jobQueue.$inferSelect;
+export type InsertJobQueue = typeof jobQueue.$inferInsert;
+
 export const searchFiltersSchema = z.object({
   destination: z.string().optional(),
   checkIn: z.string().optional(),

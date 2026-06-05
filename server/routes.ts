@@ -32,6 +32,7 @@ import { sendWhatsAppMessage, generateBookingWhatsAppMessage, generatePromoWhats
 import path from "path";
 import fs from "fs";
 import { cache, CK, TTL, invalidateTarifasCaches } from "./cache";
+import { enqueueJob } from "./jobs/job-queue";
 
 const crmEmailSchema = z.object({
   to: z.string().email(),
@@ -847,12 +848,13 @@ export async function registerRoutes(
           </div>
         `;
 
-        sendEmail({
+        // Enqueue staff notification — idempotency key prevents re-sending on retry
+        await enqueueJob("send_email", {
           to: process.env.SMTP_USER || "contacto@chromatravel.online",
           subject: `COTIZACION PRECOMPRA: ${data.hotel} - ${data.name} - $${totalPrice.toLocaleString()} MXN`,
           html: staffHtml,
           replyTo: data.email,
-        }).catch(err => console.error("Error sending staff notification:", err));
+        }, `email-precompra-staff-${lead.id}`);
 
         const customerHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -877,11 +879,12 @@ export async function registerRoutes(
           </div>
         `;
 
-        sendEmail({
+        // Enqueue customer confirmation — idempotency key prevents duplicate email
+        await enqueueJob("send_email", {
           to: data.email,
           subject: `Tu cotizacion: ${data.hotel} - Ref. ${ref}`,
           html: customerHtml,
-        }).catch(err => console.error("Error sending customer confirmation:", err));
+        }, `email-precompra-customer-${lead.id}`);
 
         const { auditService } = await import("./services/audit.service");
         await auditService.log('create_precompra', 'lead', lead.id, null, {
@@ -1232,16 +1235,26 @@ export async function registerRoutes(
       
       const lead = await storage.createLead(scoredData);
       
-      sendLeadNotification({
-        name: lead.name,
-        email: lead.email,
-        phone: lead.phone || undefined,
-        message: lead.message || undefined,
-        destination: lead.destination || undefined,
-        source: lead.source || undefined,
-      }).catch(err => console.error("Error sending lead notification:", err));
+      // Build HTML inline (same content as sendLeadNotification) so it's serialisable into the queue
+      const leadNotifHtml = `
+        <h2>Nuevo Lead Recibido</h2>
+        <table style="border-collapse:collapse;width:100%;max-width:600px;">
+          <tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">Nombre:</td><td style="padding:10px;border:1px solid #ddd;">${lead.name}</td></tr>
+          <tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">Email:</td><td style="padding:10px;border:1px solid #ddd;"><a href="mailto:${lead.email}">${lead.email}</a></td></tr>
+          ${lead.phone ? `<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">Teléfono:</td><td style="padding:10px;border:1px solid #ddd;">${lead.phone}</td></tr>` : ''}
+          ${lead.destination ? `<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">Destino:</td><td style="padding:10px;border:1px solid #ddd;">${lead.destination}</td></tr>` : ''}
+          ${lead.source ? `<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">Fuente:</td><td style="padding:10px;border:1px solid #ddd;">${lead.source}</td></tr>` : ''}
+          ${lead.message ? `<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">Mensaje:</td><td style="padding:10px;border:1px solid #ddd;">${lead.message}</td></tr>` : ''}
+        </table>
+      `;
+      await enqueueJob("send_email", {
+        to: process.env.SMTP_USER || "contacto@chromatravel.online",
+        subject: `Nuevo Lead: ${lead.name} - ${lead.destination || 'Consulta General'}`,
+        html: leadNotifHtml,
+        replyTo: lead.email,
+      }, `email-lead-staff-${lead.id}`);
 
-      // WhatsApp admin (non-blocking)
+      // WhatsApp admin (non-blocking, best-effort — not queued, tolerates failure)
       import('./services/notification.service').then(({ notificarLead }) =>
         notificarLead({
           nombre: lead.name,
@@ -3284,9 +3297,19 @@ export async function registerRoutes(
   app.post("/api/crm/documents/receipt", requireAdminRole, async (req, res) => {
     try {
       const validated = crmReceiptSchema.parse(req.body);
-      const filepath = await generateReceipt(validated.datosPago, validated.cliente, validated.brandCode || 'chroma');
-      const filename = path.basename(filepath);
-      res.json({ success: true, filepath, downloadUrl: `/api/crm/documents/download/${filename}` });
+      const idempotencyKey = `pdf-receipt-${validated.datosPago.id}`;
+      await enqueueJob("generate_pdf", {
+        documentType: "receipt",
+        brandCode: validated.brandCode || 'chroma',
+        data: validated.datosPago as unknown as Record<string, unknown>,
+        clientData: validated.cliente as unknown as Record<string, unknown>,
+        notifyEmail: validated.cliente.email,
+      }, idempotencyKey);
+      res.status(202).json({
+        success: true,
+        message: "El recibo se está generando. Recibirás un email cuando esté listo.",
+        jobKey: idempotencyKey,
+      });
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ error: 'Invalid request', details: error.errors });
@@ -3298,9 +3321,19 @@ export async function registerRoutes(
   app.post("/api/crm/documents/proforma", requireAdminRole, async (req, res) => {
     try {
       const validated = crmProformaSchema.parse(req.body);
-      const filepath = await generateProformaPdf(validated.reserva, validated.cliente, validated.brandCode || 'chroma');
-      const filename = path.basename(filepath);
-      res.json({ success: true, filepath, downloadUrl: `/api/crm/documents/download/${filename}` });
+      const idempotencyKey = `pdf-proforma-${validated.reserva.id || Date.now()}`;
+      await enqueueJob("generate_pdf", {
+        documentType: "proforma",
+        brandCode: validated.brandCode || 'chroma',
+        data: validated.reserva as unknown as Record<string, unknown>,
+        clientData: validated.cliente as unknown as Record<string, unknown>,
+        notifyEmail: validated.cliente.email,
+      }, idempotencyKey);
+      res.status(202).json({
+        success: true,
+        message: "La proforma se está generando. Recibirás un email cuando esté lista.",
+        jobKey: idempotencyKey,
+      });
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ error: 'Invalid request', details: error.errors });
@@ -3318,6 +3351,25 @@ export async function registerRoutes(
       const filepath = await generateQRCode(data);
       const filename = path.basename(filepath);
       res.json({ success: true, filepath, downloadUrl: `/api/crm/documents/download/${filename}` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Job status endpoint — for polling after async document generation
+  app.get("/api/jobs/:idempotencyKey/status", requireAdminRole, async (req, res) => {
+    try {
+      const { jobQueue: jq } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const { db: ormDb } = await import("./db");
+      const [job] = await ormDb.select({
+        status:    jq.status,
+        attempts:  jq.attempts,
+        lastError: jq.lastError,
+        updatedAt: jq.updatedAt,
+      }).from(jq).where(eq(jq.idempotencyKey, req.params.idempotencyKey));
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      res.json(job);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
