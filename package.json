@@ -10,7 +10,11 @@
     "build": "node script/build.mjs",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "test:setup": "npx tsx k6/setup-test-users.ts",
+    "test:smoke": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:5000} --duration 1m --vus 5 k6/load-test.js",
+    "test:load": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:5000} k6/load-test.js",
+    "test:load:out": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:5000} --out json=k6/results.json k6/load-test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
