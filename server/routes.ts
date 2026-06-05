@@ -31,6 +31,7 @@ import { generateReceipt, generateProforma as generateProformaPdf, generateQRCod
 import { sendWhatsAppMessage, generateBookingWhatsAppMessage, generatePromoWhatsAppMessage, generateBirthdayWhatsAppMessage } from "./crm/whatsapp";
 import path from "path";
 import fs from "fs";
+import { cache, CK, TTL, invalidateTarifasCaches } from "./cache";
 
 const crmEmailSchema = z.object({
   to: z.string().email(),
@@ -293,7 +294,19 @@ export async function registerRoutes(
         });
       }
 
+      const cacheKey = CK.hotelSearch(validation.data as unknown as Record<string, unknown>);
+      const cached = cache.get<object>(cacheKey);
+      if (cached) {
+        res.setHeader("X-Cache", "HIT");
+        return res.json(cached);
+      }
+
       const result = await unifiedHotelSearch(validation.data);
+      // Only cache successful responses with results
+      if (result && (result as any).total > 0) {
+        cache.set(cacheKey, result, TTL.HOTEL_SEARCH);
+      }
+      res.setHeader("X-Cache", "MISS");
       res.json(result);
     } catch (error) {
       console.error("Unified search error:", error);
@@ -424,6 +437,17 @@ export async function registerRoutes(
       const hotel = req.query.hotel as string | undefined;
       const diversify = req.query.diversify === "true";
 
+      // ── Cache check ──────────────────────────────────────────────────────────
+      const brandId = (req as any).brand?.id ?? "public";
+      const cacheKey = CK.tarifas(brandId, page, limit, hotel ?? "", diversify);
+      const cached = cache.get<object>(cacheKey);
+      if (cached) {
+        res.setHeader("X-Cache", "HIT");
+        res.setHeader("Cache-Control", "public, max-age=180");
+        return res.json(cached);
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
       const today = new Date().toISOString().split("T")[0];
       const baseWhere = `WHERE estado = 'Activo' AND fecha_inicio >= '${today}'`;
       let whereClause = baseWhere;
@@ -542,14 +566,18 @@ export async function registerRoutes(
           pool.query(`SELECT DISTINCT hotel FROM bloqueos ${baseWhere} ORDER BY hotel`),
         ]);
 
-        return res.json({
+        const diversifyPayload = {
           total: parseInt(countResult.rows[0].count),
           page: 1,
           limit: finalSelection.length,
           totalPages: 1,
           hotels: hotelsResult.rows.map((r: any) => r.hotel),
           tarifas: finalSelection.map(mapRow),
-        });
+        };
+        cache.set(cacheKey, diversifyPayload, TTL.TARIFAS);
+        res.setHeader("X-Cache", "MISS");
+        res.setHeader("Cache-Control", "public, max-age=180");
+        return res.json(diversifyPayload);
       }
 
       const countQuery = `SELECT COUNT(*) FROM bloqueos ${whereClause}`;
@@ -564,14 +592,18 @@ export async function registerRoutes(
 
       const total = parseInt(countResult.rows[0].count);
 
-      res.json({
+      const payload = {
         total,
         page,
         limit,
         totalPages: Math.ceil(total / limit),
         hotels: hotelsResult.rows.map((r: any) => r.hotel),
         tarifas: dataResult.rows.map(mapRow),
-      });
+      };
+      cache.set(cacheKey, payload, TTL.TARIFAS);
+      res.setHeader("X-Cache", "MISS");
+      res.setHeader("Cache-Control", "public, max-age=180");
+      res.json(payload);
     } catch (error: any) {
       console.error("[Tarifas Especiales] Error:", error);
       res.status(500).json({ error: "Error fetching special rates" });

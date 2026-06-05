@@ -7,6 +7,7 @@
  */
 
 import type { Express, Request, Response } from "express";
+import { invalidateTarifasCaches } from "./cache";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { parse as csvParse } from "csv-parse/sync";
@@ -410,6 +411,10 @@ export function registerOtaB2cRoutes(app: Express) {
         });
 
         console.log(`[Inventory Upload] ${file.originalname} | +${inserted} inserted, ~${updated} updated, ${errors.length} errors`);
+
+        // Bust tarifas cache for this brand (and public) so next request gets fresh data
+        const uploadBrandId = (req as any).brand?.id ?? "public";
+        invalidateTarifasCaches(uploadBrandId);
 
         return res.status(201).json({
           success: true,

@@ -1,5 +1,6 @@
 import { db, isDbAvailable } from "./db";
 import { eq, ilike, and, or, gte, lte, desc, asc, sql } from "drizzle-orm";
+import { cache, CK, TTL, invalidateBookingCaches, invalidateLeadCaches } from "./cache";
 import {
   users, hotels, rooms, rates, bookings, leads, destinations, providers, blogPosts, lgbtEvents, lgbtCruises, brands,
   type User, type InsertUser,
@@ -295,11 +296,13 @@ export class DatabaseStorage implements IStorage {
       ...insertBooking,
       confirmationCode,
     }).returning();
+    if (booking.brandId) invalidateBookingCaches(booking.brandId);
     return booking;
   }
 
   async updateBooking(id: string, data: Partial<InsertBooking>): Promise<Booking | undefined> {
     const [booking] = await getDatabase().update(bookings).set(data).where(eq(bookings.id, id)).returning();
+    if (booking?.brandId) invalidateBookingCaches(booking.brandId);
     return booking;
   }
 
@@ -315,11 +318,13 @@ export class DatabaseStorage implements IStorage {
 
   async createLead(insertLead: InsertLead): Promise<Lead> {
     const [lead] = await getDatabase().insert(leads).values(insertLead).returning();
+    if (lead.brandId) invalidateLeadCaches(lead.brandId);
     return lead;
   }
 
   async updateLead(id: string, data: Partial<InsertLead>): Promise<Lead | undefined> {
     const [lead] = await getDatabase().update(leads).set(data).where(eq(leads.id, id)).returning();
+    if (lead?.brandId) invalidateLeadCaches(lead.brandId);
     return lead;
   }
 
@@ -328,7 +333,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteLead(id: string): Promise<void> {
+    const [lead] = await getDatabase().select({ brandId: leads.brandId }).from(leads).where(eq(leads.id, id));
     await getDatabase().delete(leads).where(eq(leads.id, id));
+    if (lead?.brandId) invalidateLeadCaches(lead.brandId);
   }
 
   // Destinations
@@ -558,64 +565,51 @@ export class DatabaseStorage implements IStorage {
 
   // Multi-brand stats for unified dashboard
   async getMultiBrandStats() {
-    const allBrands = await getDatabase().select().from(brands);
-    
-    const brandStats = await Promise.all(allBrands.map(async (brand) => {
-      const [bookingsCount] = await getDatabase()
-        .select({ count: sql<number>`count(*)` })
-        .from(bookings)
-        .where(eq(bookings.brandId, brand.id));
-      
-      const [revenueResult] = await getDatabase()
-        .select({ total: sql<string>`COALESCE(SUM(CAST(total_price AS DECIMAL)), 0)` })
-        .from(bookings)
-        .where(and(eq(bookings.brandId, brand.id), eq(bookings.paymentStatus, 'paid')));
-      
-      const [leadsCount] = await getDatabase()
-        .select({ count: sql<number>`count(*)` })
-        .from(leads)
-        .where(eq(leads.brandId, brand.id));
-      
-      const [customersCount] = await getDatabase()
-        .select({ count: sql<number>`count(*)` })
-        .from(users)
-        .where(and(eq(users.brandId, brand.id), eq(users.role, 'customer')));
-      
-      const [postsCount] = await getDatabase()
-        .select({ count: sql<number>`count(*)` })
-        .from(blogPosts)
-        .where(eq(blogPosts.brandId, brand.id));
-      
-      const [destinationsCount] = await getDatabase()
-        .select({ count: sql<number>`count(*)` })
-        .from(destinations)
-        .where(eq(destinations.brandId, brand.id));
+    return cache.wrap(CK.multiStats(), TTL.MULTI_STATS, async () => {
+      // Single query: all aggregates in one round-trip using LEFT JOINs + GROUP BY
+      const rows = await getDatabase().execute(sql`
+        SELECT
+          b.id                                                          AS brand_id,
+          b.code                                                        AS brand_code,
+          b.name                                                        AS brand_name,
+          COUNT(DISTINCT bk.id)                                         AS bookings_count,
+          COALESCE(SUM(CASE WHEN bk.payment_status = 'paid'
+            THEN CAST(bk.total_price AS DECIMAL) ELSE 0 END), 0)       AS revenue,
+          COUNT(DISTINCT l.id)                                          AS leads_count,
+          COUNT(DISTINCT CASE WHEN u.role = 'customer' THEN u.id END)  AS customers_count,
+          COUNT(DISTINCT bp.id)                                         AS posts_count,
+          COUNT(DISTINCT d.id)                                          AS destinations_count
+        FROM brands b
+        LEFT JOIN bookings  bk ON bk.brand_id = b.id
+        LEFT JOIN leads      l ON l.brand_id  = b.id
+        LEFT JOIN users      u ON u.brand_id  = b.id
+        LEFT JOIN blog_posts bp ON bp.brand_id = b.id
+        LEFT JOIN destinations d ON d.brand_id = b.id
+        GROUP BY b.id, b.code, b.name
+        ORDER BY b.name
+      `);
 
-      return {
-        brandId: brand.id,
-        brandCode: brand.code,
-        brandName: brand.name,
-        bookings: Number(bookingsCount?.count || 0),
-        revenue: parseFloat(revenueResult?.total || '0'),
-        leads: Number(leadsCount?.count || 0),
-        customers: Number(customersCount?.count || 0),
-        posts: Number(postsCount?.count || 0),
-        destinations: Number(destinationsCount?.count || 0),
-      };
-    }));
+      const brandStats = (rows as any[]).map((row) => ({
+        brandId:      row.brand_id,
+        brandCode:    row.brand_code,
+        brandName:    row.brand_name,
+        bookings:     Number(row.bookings_count  || 0),
+        revenue:      parseFloat(row.revenue      || '0'),
+        leads:        Number(row.leads_count      || 0),
+        customers:    Number(row.customers_count  || 0),
+        posts:        Number(row.posts_count      || 0),
+        destinations: Number(row.destinations_count || 0),
+      }));
 
-    // Calculate totals
-    const totals = brandStats.reduce((acc, brand) => ({
-      totalBookings: acc.totalBookings + brand.bookings,
-      totalRevenue: acc.totalRevenue + brand.revenue,
-      totalLeads: acc.totalLeads + brand.leads,
-      totalCustomers: acc.totalCustomers + brand.customers,
-    }), { totalBookings: 0, totalRevenue: 0, totalLeads: 0, totalCustomers: 0 });
+      const totals = brandStats.reduce((acc, brand) => ({
+        totalBookings:  acc.totalBookings  + brand.bookings,
+        totalRevenue:   acc.totalRevenue   + brand.revenue,
+        totalLeads:     acc.totalLeads     + brand.leads,
+        totalCustomers: acc.totalCustomers + brand.customers,
+      }), { totalBookings: 0, totalRevenue: 0, totalLeads: 0, totalCustomers: 0 });
 
-    return {
-      totals,
-      brands: brandStats,
-    };
+      return { totals, brands: brandStats };
+    });
   }
 }
 
