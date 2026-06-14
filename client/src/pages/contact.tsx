@@ -4,31 +4,37 @@ import { Footer } from "@/components/footer";
 import { LeadForm } from "@/components/lead-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const contactInfo = [
-  {
-    icon: MapPin,
-    title: "Ubicación",
-    details: ["Morelia, Michoacán", "México"],
-  },
-  {
-    icon: Phone,
-    title: "Teléfono / WhatsApp",
-    details: ["+52 443 404 4104"],
-  },
-  {
-    icon: Mail,
-    title: "Email",
-    details: ["contacto@chromatravel.online"],
-  },
-  {
-    icon: Clock,
-    title: "Horario",
-    details: ["Lunes a Viernes: 9:00 - 19:00", "Sábados: 10:00 - 14:00"],
-  },
-];
+import { useBrand } from "@/lib/brand-context";
 
 export default function Contact() {
+  const { brand } = useBrand();
+  const brandEmail  = brand?.email  ?? "contacto@chromatravel.online";
+  const brandWa     = brand?.whatsappNumber ?? "+524434044104";
+  const brandWaClean = brandWa.replace(/[^0-9]/g, "");
+
+  const contactInfo = [
+    {
+      icon: MapPin,
+      title: "Ubicación",
+      details: ["Morelia, Michoacán", "México"],
+    },
+    {
+      icon: Phone,
+      title: "Teléfono / WhatsApp",
+      details: [brandWa],
+    },
+    {
+      icon: Mail,
+      title: "Email",
+      details: [brandEmail],
+    },
+    {
+      icon: Clock,
+      title: "Horario",
+      details: ["Lunes a Viernes: 9:00 - 19:00", "Sábados: 10:00 - 14:00"],
+    },
+  ];
+
   return (
     <div className="flex min-h-screen flex-col">
       <Navigation />
@@ -92,7 +98,7 @@ export default function Contact() {
                       </p>
                     </div>
                     <a
-                      href="https://wa.me/524434044104"
+                      href={`https://wa.me/${brandWaClean}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -113,7 +119,7 @@ export default function Contact() {
                     allowFullScreen
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
-                    title="Ubicación de chromaTravel"
+                    title="Ubicación de la agencia"
                   />
                 </div>
               </div>
