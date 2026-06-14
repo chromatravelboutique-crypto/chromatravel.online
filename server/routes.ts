@@ -738,7 +738,7 @@ export async function registerRoutes(
           ? kuaniTierRaw
           : kuaniTierRaw.includes('PREMIUM') ? 'PREMIUM' : 'ESTANDAR') as KuaniTier;
         const pricing = calcularPrecioBloqueo({
-          precioHabitacion: totalPrice,
+          precioHabitacion: totalPrice * noches,
           adultos: data.adults,
           menores: data.children,
           juniors: data.juniors,

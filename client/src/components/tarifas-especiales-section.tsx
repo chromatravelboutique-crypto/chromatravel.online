@@ -292,7 +292,8 @@ function calculateTotal(tarifa: Tarifa, rooms: RoomDistribution[], nights: numbe
     if (room.juniors > 0) total += room.juniors * (pJunior > 0 ? pJunior : baseRate * 0.7);
   }
 
-  return total;
+  // Las tarifas son por persona por noche — multiplicar por el total de noches
+  return Math.round(total * nights * 100) / 100;
 }
 
 function TravelerCounter({
@@ -855,7 +856,6 @@ function CotizadorModal({
 function TarifaCard({ tarifa, onConsultar }: { tarifa: Tarifa; onConsultar: (t: Tarifa) => void }) {
   const nights = getNights(tarifa.checkIn, tarifa.checkOut);
   const price = parseFloat(tarifa.priceDouble);
-  const pricePerNight = Math.round(price / nights);
 
   return (
     <Card className="group relative overflow-visible transition-shadow duration-200 hover:shadow-lg" data-testid={`card-tarifa-${tarifa.hotel.replace(/\s+/g, "-").toLowerCase()}`}>
@@ -905,11 +905,9 @@ function TarifaCard({ tarifa, onConsultar }: { tarifa: Tarifa; onConsultar: (t: 
             <div>
               <p className="text-xs text-muted-foreground">Desde</p>
               <p className="text-lg font-bold tracking-tight" data-testid="text-tarifa-price">
-                {formatPrice(tarifa.priceDouble)}
+                {formatPrice(price)}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {formatPrice(pricePerNight)} / noche
-              </p>
+              <p className="text-xs text-muted-foreground">por persona / noche</p>
             </div>
             <Button
               size="sm"
