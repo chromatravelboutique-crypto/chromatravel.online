@@ -9,19 +9,35 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async complete(options: AICompletionOptions): Promise<AICompletionResult> {
-    // Use fetch directly instead of openai SDK
     const messages = options.messages.map(m => ({
       role: m.role,
       content: m.content,
     }));
 
-    const response = await client.chat.completions.create({
+    const body = {
       model: options.model || "gpt-4o",
       max_tokens: options.maxTokens || 1024,
       temperature: options.temperature ?? 0.7,
       messages,
-      ...(options.jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+      ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
+    };
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
     });
+
+    if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`);
+
+    const response = await res.json() as {
+      choices: { message: { content: string } }[];
+      model: string;
+      usage?: { total_tokens?: number };
+    };
 
     const choice = response.choices[0];
     return {

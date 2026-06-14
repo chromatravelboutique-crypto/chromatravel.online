@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { parse as csvParse } from "csv-parse/sync";
-import { pool as dbPool } from "./db";
+import { getPool } from "./db";
 
 // Try multiple filenames to support both development and production environments
 const POSSIBLE_CSV_PATHS = [
@@ -80,6 +80,12 @@ function parseMinorCost(menores: string): number | null {
 export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: number; errors: number }> {
   if (!fs.existsSync(CSV_PATH)) {
     console.warn("[Fenix Seed] CSV not found:", CSV_PATH);
+    return { inserted: 0, updated: 0, errors: 0 };
+  }
+
+  const dbPool = getPool();
+  if (!dbPool) {
+    console.warn("[Fenix Seed] DB not available");
     return { inserted: 0, updated: 0, errors: 0 };
   }
 

@@ -40,7 +40,7 @@ class ImportService {
         skip_empty_lines: true,
         trim: true,
       });
-      return records;
+      return records as PreviewRow[];
     } catch (error) {
       console.error("[Import] CSV parse error:", error);
       throw new Error("Failed to parse CSV file");

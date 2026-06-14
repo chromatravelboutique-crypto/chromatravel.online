@@ -3,7 +3,7 @@
  * Elimina bloqueos con fecha_inicio < hoy + 10 días (ventana configurable)
  * Se ejecuta cada 24h
  */
-import { pool } from "../db";
+import { getPool } from "../db";
 
 const DAYS_AHEAD = parseInt(process.env.CLEANUP_DAYS_AHEAD || "10");
 
@@ -12,6 +12,8 @@ export async function cleanupBloqueos(): Promise<void> {
   cutoffDate.setDate(cutoffDate.getDate() + DAYS_AHEAD);
   const cutoff = cutoffDate.toISOString().split("T")[0];
 
+  const pool = getPool();
+  if (!pool) return;
   try {
     const result = await pool.query(
       `DELETE FROM bloqueos 

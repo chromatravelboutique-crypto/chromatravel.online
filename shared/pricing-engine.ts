@@ -183,5 +183,3 @@ export function calcularPrecioBloqueo(params: {
   );
 }
 
-// Re-export old name for backwards compat
-export { PricingOutput as PricingOutput };

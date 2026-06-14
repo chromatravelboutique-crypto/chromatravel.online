@@ -3,7 +3,7 @@
  * Cada 5 minutos libera reservas en estado 'hold' o 'pending_payment' que superaron su expiresAt.
  * Restaura habitaciones_disponibles en bloqueos con transacción atómica.
  */
-import { db, getPool } from "../db";
+import { getDb, getPool } from "../db";
 import { reservas } from "@shared/schema";
 import { and, inArray, lt, sql } from "drizzle-orm";
 
@@ -16,7 +16,7 @@ export async function expireHolds(): Promise<void> {
 
   try {
     // 1. Buscar holds expirados
-    const expired = await db
+    const expired = await getDb()
       .select()
       .from(reservas)
       .where(
@@ -61,7 +61,7 @@ export async function expireHolds(): Promise<void> {
             );
 
         // Marcar como expirada
-        await db
+        await getDb()
           .update(reservas)
           .set({ status: "expired", updatedAt: new Date() })
           .where(inArray(reservas.id, [reserva.id]));

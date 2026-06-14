@@ -313,7 +313,7 @@ export function registerOtaB2cRoutes(app: Express) {
         const ext = file.originalname.toLowerCase();
         if (ext.endsWith(".csv")) {
           const text = file.buffer.toString("utf-8");
-          const raw = csvParse(text, { columns: true, skip_empty_lines: true, trim: true });
+          const raw = csvParse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, any>[];
           rows = raw.map(normalizeRow);
         } else if (ext.endsWith(".xlsx") || ext.endsWith(".xls")) {
           const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: false });

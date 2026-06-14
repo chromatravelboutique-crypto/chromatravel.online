@@ -52,17 +52,19 @@ const amenitiesOptions = [
   { id: "breakfast", label: "Desayuno incluido" },
 ];
 
-function FilterSidebar({ 
-  filters, 
-  onFilterChange 
-}: { 
-  filters: {
-    priceRange: number[];
-    lgbtOnly: boolean;
-    amenities: string[];
-    starRating: number | null;
-  };
-  onFilterChange: (filters: typeof filters) => void;
+type HotelFilters = {
+  priceRange: number[];
+  lgbtOnly: boolean;
+  amenities: string[];
+  starRating: number | null;
+};
+
+function FilterSidebar({
+  filters,
+  onFilterChange
+}: {
+  filters: HotelFilters;
+  onFilterChange: (filters: HotelFilters) => void;
 }) {
   return (
     <div className="space-y-6">

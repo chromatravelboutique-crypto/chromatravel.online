@@ -769,7 +769,7 @@ export async function registerRoutes(
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
         const reservaResult = await (async () => {
           try {
-            const { db } = await import("./db");
+            const { getDb } = await import("./db"); const db = getDb();
             const { reservas } = await import("@shared/schema");
             const [reserva] = await db.insert(reservas).values({
               brandId:                (req as any).brand?.id ?? null,
@@ -1165,7 +1165,7 @@ export async function registerRoutes(
 
   app.get("/api/reservas/:id", async (req, res) => {
     try {
-      const { db } = await import("./db");
+      const { getDb } = await import("./db"); const db = getDb();
       const { reservas } = await import("@shared/schema");
       const { eq } = await import("drizzle-orm");
       const [reserva] = await db.select().from(reservas).where(eq(reservas.id, req.params.id)).limit(1);
@@ -1185,7 +1185,7 @@ export async function registerRoutes(
 
   app.post("/api/reservas/:id/cancel", async (req, res) => {
     try {
-      const { db } = await import("./db");
+      const { getDb } = await import("./db"); const db = getDb();
       const { reservas } = await import("@shared/schema");
       const { eq, and, inArray } = await import("drizzle-orm");
       const { getPool } = await import("./db");
@@ -1230,7 +1230,7 @@ export async function registerRoutes(
       const { paymentMethod, paymentIntentId } = req.body;
       if (!paymentMethod) return res.status(400).json({ message: "paymentMethod requerido" });
 
-      const { db } = await import("./db");
+      const { getDb } = await import("./db"); const db = getDb();
       const { reservas } = await import("@shared/schema");
       const { eq } = await import("drizzle-orm");
 
@@ -1657,12 +1657,12 @@ export async function registerRoutes(
   // ── ERP DASHBOARD — métricas reales de inventario y revenue ─────────────────
   app.get("/api/admin/erp/dashboard", requireAgentOrAdmin, async (req, res) => {
     try {
-      const { getPool } = await import("./db");
-      const { db: ormDb } = await import("./db");
+      const { getPool, getDb } = await import("./db");
       const { reservas: reservasTable } = await import("@shared/schema");
       const { count, sum, sql: sqlExpr, eq, and, gte, lt, inArray } = await import("drizzle-orm");
       const pool = getPool();
       if (!pool) return res.status(503).json({ error: "DB not available" });
+      const ormDb = getDb();
 
       const now = new Date();
       const todayStr = now.toISOString().split("T")[0];
