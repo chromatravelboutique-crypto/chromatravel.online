@@ -425,10 +425,18 @@ export async function registerRoutes(
       const diversify = req.query.diversify === "true";
 
       const today = new Date().toISOString().split("T")[0];
+      const brandId: number | null = (req as any).brand?.id ?? null;
       const baseWhere = `WHERE estado = 'Activo' AND fecha_inicio >= '${today}'`;
       let whereClause = baseWhere;
       const params: any[] = [];
       let paramIdx = 1;
+
+      // Filter by brand when brand_id column exists and brand is resolved
+      if (brandId) {
+        whereClause += ` AND (brand_id = $${paramIdx} OR brand_id IS NULL)`;
+        params.push(brandId);
+        paramIdx++;
+      }
 
       if (hotel) {
         whereClause += ` AND LOWER(hotel) LIKE $${paramIdx}`;

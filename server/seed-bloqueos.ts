@@ -11,15 +11,29 @@ export async function seedBloqueos(): Promise<void> {
   }
 
   try {
-    const countResult = await pool.query("SELECT COUNT(*) FROM bloqueos");
+    // Ensure brand_id column exists (idempotent — fails silently if already present)
+    await pool.query(
+      `ALTER TABLE bloqueos ADD COLUMN IF NOT EXISTS brand_id INTEGER`
+    ).catch(() => {});
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM bloqueos WHERE brand_id IS NULL OR brand_id IN (
+         SELECT id FROM brands WHERE domain = 'chromatravel.online' LIMIT 1
+       )`
+    );
     const count = parseInt(countResult.rows[0].count);
 
     if (count > 0) {
-      console.log(`Bloqueos already seeded (${count} records), skipping`);
+      console.log(`Bloqueos (Chroma) already seeded (${count} records), skipping`);
       return;
     }
 
-    console.log("Seeding bloqueos from CSV...");
+    const brandRow = await pool.query(
+      `SELECT id FROM brands WHERE domain = 'chromatravel.online' LIMIT 1`
+    );
+    const brandId: number | null = brandRow.rows[0]?.id ?? null;
+
+    console.log("Seeding Chroma bloqueos from CSV...");
 
     const csvPath = path.resolve("attached_assets/bloqueos_2026_consolidado_final_1770569075903.csv");
     if (!fs.existsSync(csvPath)) {
@@ -50,7 +64,7 @@ export async function seedBloqueos(): Promise<void> {
       let paramIdx = 1;
 
       for (const row of batch) {
-        values.push(`($${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, $${paramIdx+6}, $${paramIdx+7}, $${paramIdx+8}, $${paramIdx+9}, $${paramIdx+10}, $${paramIdx+11}, $${paramIdx+12}, $${paramIdx+13}, $${paramIdx+14})`);
+        values.push(`($${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, $${paramIdx+6}, $${paramIdx+7}, $${paramIdx+8}, $${paramIdx+9}, $${paramIdx+10}, $${paramIdx+11}, $${paramIdx+12}, $${paramIdx+13}, $${paramIdx+14}, $${paramIdx+15})`);
 
         params.push(
           row.hotel || null,
@@ -67,22 +81,23 @@ export async function seedBloqueos(): Promise<void> {
           parseNum(row.tarifa_junior),
           parseNum(row.habitaciones_disponibles),
           row.observaciones || null,
-          row.estado || "Activo"
+          row.estado || "Activo",
+          brandId,
         );
 
-        paramIdx += 15;
+        paramIdx += 16;
       }
 
       if (values.length > 0) {
         await pool.query(
-          `INSERT INTO bloqueos (hotel, proveedor, fecha_inicio, fecha_fin, tipo_habitacion, tarifa_sencilla, tarifa_doble, tarifa_triple, tarifa_cuadruple, tarifa_primer_menor, tarifa_segundo_menor, tarifa_junior, habitaciones_disponibles, observaciones, estado) VALUES ${values.join(", ")}`,
+          `INSERT INTO bloqueos (hotel, proveedor, fecha_inicio, fecha_fin, tipo_habitacion, tarifa_sencilla, tarifa_doble, tarifa_triple, tarifa_cuadruple, tarifa_primer_menor, tarifa_segundo_menor, tarifa_junior, habitaciones_disponibles, observaciones, estado, brand_id) VALUES ${values.join(", ")}`,
           params
         );
         inserted += values.length;
       }
     }
 
-    console.log(`Bloqueos seeding complete: ${inserted} records inserted`);
+    console.log(`Chroma bloqueos seeding complete: ${inserted} records inserted`);
   } catch (error) {
     console.error("Bloqueos seeding failed:", error);
   }
