@@ -6,27 +6,56 @@
  *   precioVenta = tarifaNeta × 1.05            (5% margen agencia = precio SPEI/efectivo)
  *   precioTarj  = precioVenta / (1 - 0.0418)  (Clip 3.6% + IVA 16% = 4.18% efectivo)
  *   precioMSI   = precioVenta / (1 - tasaMSI) (sobretasa Clip MSI pasa al cliente)
- *   kuaniPts    = floor(precioVenta × tierPct) (por tier del hotel)
+ *   fenixPts    = floor(precioVenta × tierPct) (por tier de valor de reserva)
+ *
+ * Tiers por valor de tarifa neta:
+ *   BASICO  < $12,000       → MSI 3 meses         · 1% Fénix Points
+ *   MEDIO   $12,000–$34,999 → MSI 3 y 6 meses    · 2% Fénix Points
+ *   PREMIUM ≥ $35,000       → MSI 3, 6 y 12 meses · 3% Fénix Points
  *
  * Reglas MSI:
- *   - Solo pago TOTAL (no anticipos/depósitos parciales)
- *   - Monto mínimo: $7,000 MXN sobre precioVenta
- *   - Plazos: 3, 6, 9, 12, 18, 24 meses
- *   - Sobretasa incluye IVA y la absorbe el cliente (no la agencia)
+ *   - Solo pago TOTAL (nunca anticipos/depósitos parciales)
+ *   - precioVenta mínimo $7,000 MXN
+ *   - Sobretasa con IVA la absorbe el cliente; agencia siempre recibe precioVenta
  */
 
-export type KuaniTier = 'ESTANDAR' | 'PREMIUM' | 'PREMIUM PLUS' | 'LUXURY';
+// ── TIERS POR VALOR DE RESERVA ────────────────────────────────────────────────
 
-/** Porcentaje Kuani por tier */
-export const KUANI_PCT_BY_TIER: Record<KuaniTier, number> = {
-  ESTANDAR:       0.019,   // 1.9%
-  PREMIUM:        0.02855, // 2.855%
-  'PREMIUM PLUS': 0.0381,  // 3.81%
-  LUXURY:         0.0381,  // 3.81%
+export type BloqueoTier = 'BASICO' | 'MEDIO' | 'PREMIUM';
+
+export const BLOQUEO_TIER_CONFIG: Record<BloqueoTier, {
+  label: string;
+  fenixPointsPct: number;
+  msiPlazos: number[];
+}> = {
+  BASICO: {
+    label: 'Básico',
+    fenixPointsPct: 0.01,   // 1%
+    msiPlazos: [3],
+  },
+  MEDIO: {
+    label: 'Medio',
+    fenixPointsPct: 0.02,   // 2%
+    msiPlazos: [3, 6],
+  },
+  PREMIUM: {
+    label: 'Premium',
+    fenixPointsPct: 0.03,   // 3%
+    msiPlazos: [3, 6, 12],
+  },
 };
 
+/** Determina el tier por tarifa neta del bloqueo */
+export function getBloqueoTier(tarifaNeta: number): BloqueoTier {
+  if (tarifaNeta < 12000) return 'BASICO';
+  if (tarifaNeta < 35000) return 'MEDIO';
+  return 'PREMIUM';
+}
+
+// ── TASAS CLIP ────────────────────────────────────────────────────────────────
+
 /**
- * Tasas Clip MSI 2026 — comisión total con IVA que carga el banco.
+ * Tasas Clip MSI 2026 — comisión total con IVA.
  * El cliente paga la sobretasa (la agencia siempre recibe precioVenta).
  * Fuente: tarifario Clip 2026.
  */
@@ -39,16 +68,16 @@ export const MSI_RATES: Record<number, number> = {
   24: 0.3569,  // 35.69% con IVA
 };
 
-export const MSI_PLAZOS = [3, 6, 9, 12, 18, 24] as const;
-
 /** Monto mínimo de precioVenta para ofrecer MSI */
 export const MSI_MONTO_MINIMO = 7000;
 
+// ── INTERFACES ────────────────────────────────────────────────────────────────
+
 export interface MSIOpcion {
   plazo: number;
-  /** Precio total que paga el cliente (precioVenta + sobretasa) */
+  /** Precio total que paga el cliente */
   precioTotal: number;
-  /** Sobretasa en MXN (lo que paga el cliente extra vs SPEI) */
+  /** Sobretasa en MXN */
   sobretasa: number;
   /** Mensualidad aproximada */
   mensualidad: number;
@@ -59,58 +88,64 @@ export interface PricingConfig {
   comisionMayoristaIncluida: number;
   /** Margen agencia sobre tarifa neta */
   margen: number;
-  /** Comisión Clip efectiva con IVA (3.6% × 1.16 = 4.176% ≈ 4.18%) */
+  /** Comisión Clip efectiva con IVA (3.6% × 1.16 = 4.18%) */
   comisionClip: number;
 }
 
 export const PRICING_CONFIG_DEFAULT: PricingConfig = {
   comisionMayoristaIncluida: 0.15,
   margen: 0.05,
-  comisionClip: 0.0418, // 3.6% + IVA 16% = 4.18% efectivo
+  comisionClip: 0.0418,
 };
 
 export interface PricingInput {
-  /** Precio público por persona por noche (del proveedor, con 15% incluido) */
+  /** Precio público total (del proveedor, con 15% incluido) */
   tarifaPublicaPPPN: number;
   adultos: number;
   menores: number;
   juniors: number;
   infantes: number;
   noches: number;
-  /** Tier Kuani del hotel */
-  kuaniTier?: KuaniTier;
-  /** Puntos Kuani existentes del cliente para redimir */
+  /** @deprecated - Tier por valor se calcula automáticamente */
+  kuaniTier?: string;
+  /** Puntos Fénix existentes del cliente para redimir */
   kuaniPuntosCliente?: number;
-  /** Si se pasa precio ya calculado por habitación (suma de todos los pasajeros × noches) */
+  /** Si se pasa precio ya calculado (suma de todos los pasajeros × noches) */
   precioHabitacionTotal?: number;
 }
 
 export interface PricingOutput {
   /** Precio público total (proveedor) */
   tarifaPublicaTotal:  number;
-  /** Precio neto (sin la comisión del mayorista) */
+  /** Precio neto (lo que paga la agencia al proveedor) */
   tarifaNeta:          number;
-  /** Precio de venta (con margen 5%) = precio SPEI/efectivo */
+  /** Precio de venta = precio SPEI/efectivo (tarifaNeta × 1.05) */
   precioVenta:         number;
-  /** Precio con tarjeta Clip — pago de contado (divide method, agencia recibe precioVenta) */
+  /** Precio tarjeta Clip contado (divide method — agencia recibe precioVenta exacto) */
   precioTarjeta:       number;
-  /** Comisión Clip en MXN (contado) */
+  /** Comisión Clip contado en MXN */
   comisionClipMonto:   number;
-  /** Ganancia agencia en MXN */
+  /** Ganancia bruta agencia en MXN */
   gananciaAgencia:     number;
-  /** Puntos Kuani que genera esta reserva */
+  /** Tier del bloqueo por valor */
+  bloqueoTier:         BloqueoTier;
+  /** % Fénix Points del tier */
+  fenixPointsPct:      number;
+  /** Puntos Fénix que genera esta reserva */
   kuaniGenerados:      number;
-  /** Descuento aplicado por redimir puntos (máx 30%) */
+  /** Descuento aplicado por redimir puntos (máx = gananciaAgencia) */
   kuaniDescuento:      number;
-  /** Precio SPEI después de descuento Kuani */
+  /** Precio SPEI después de descuento Fénix Points */
   precioEfectivoFinal: number;
-  /** Precio tarjeta contado después de descuento Kuani */
+  /** Precio tarjeta contado después de descuento Fénix Points */
   precioTarjetaFinal:  number;
   /** Precio por persona (efectivo) */
   precioPorPersona:    number;
-  /** Opciones MSI disponibles (solo si precioVenta ≥ $7,000) */
+  /** Opciones MSI disponibles según tier y monto (solo en pago total) */
   msiOpciones:         MSIOpcion[];
 }
+
+// ── FUNCIÓN PRINCIPAL ─────────────────────────────────────────────────────────
 
 export function calcularPrecio(
   input: PricingInput,
@@ -119,7 +154,6 @@ export function calcularPrecio(
   const {
     tarifaPublicaPPPN,
     adultos, menores, juniors, noches,
-    kuaniTier = 'ESTANDAR',
     kuaniPuntosCliente = 0,
     precioHabitacionTotal,
   } = input;
@@ -129,7 +163,7 @@ export function calcularPrecio(
   if (comisionClip >= 1) throw new Error('comisionClip debe ser < 1');
   if (comisionMayoristaIncluida >= 1) throw new Error('comisionMayorista debe ser < 1');
 
-  // ── 1. PRECIO BASE TOTAL ──────────────────────────────────────────────────
+  // ── 1. PRECIO BASE ────────────────────────────────────────────────────────
   const pax = Math.max(1, adultos + menores + juniors);
   const tarifaPublicaTotal = precioHabitacionTotal != null
     ? precioHabitacionTotal
@@ -137,33 +171,35 @@ export function calcularPrecio(
 
   if (tarifaPublicaTotal <= 0) return zero();
 
-  // ── 2. TARIFA NETA + MARGEN ───────────────────────────────────────────────
-  const tarifaNeta    = r2(tarifaPublicaTotal * (1 - comisionMayoristaIncluida));
-  const gananciaAgencia = r2(tarifaNeta * margen);
-  const precioVenta   = r2(tarifaNeta * (1 + margen));
+  // ── 2. TARIFA NETA + MARGEN + TIER ───────────────────────────────────────
+  const tarifaNeta       = r2(tarifaPublicaTotal * (1 - comisionMayoristaIncluida));
+  const gananciaAgencia  = r2(tarifaNeta * margen);
+  const precioVenta      = r2(tarifaNeta * (1 + margen));
+
+  const bloqueoTier      = getBloqueoTier(tarifaNeta);
+  const tierConfig       = BLOQUEO_TIER_CONFIG[bloqueoTier];
+  const fenixPointsPct   = tierConfig.fenixPointsPct;
 
   // ── 3. PRECIO TARJETA CONTADO (divide method) ─────────────────────────────
-  // Divide garantiza que la agencia recibe exactamente precioVenta tras la comisión Clip.
   const precioTarjeta    = r2(precioVenta / (1 - comisionClip));
   const comisionClipMonto = r2(precioTarjeta - precioVenta);
 
-  // ── 4. KUANI POINTS ───────────────────────────────────────────────────────
-  const kuaniPct      = KUANI_PCT_BY_TIER[kuaniTier] ?? KUANI_PCT_BY_TIER.ESTANDAR;
-  const kuaniGenerados = Math.floor(precioVenta * kuaniPct);
+  // ── 4. FÉNIX POINTS ───────────────────────────────────────────────────────
+  const kuaniGenerados   = Math.floor(precioVenta * fenixPointsPct);
 
-  // ── 5. DESCUENTO KUANI (máx 30% de precioVenta) ──────────────────────────
-  const maxDescuento      = r2(precioVenta * 0.30);
-  const kuaniDescuento    = r2(Math.min(kuaniPuntosCliente, maxDescuento));
+  // ── 5. DESCUENTO POR REDENCIÓN (máx = gananciaAgencia para proteger el 5%)
+  const maxDescuento     = gananciaAgencia; // nunca sacrifica el costo de la agencia
+  const kuaniDescuento   = r2(Math.min(kuaniPuntosCliente, maxDescuento));
   const precioEfectivoFinal = r2(Math.max(0, precioVenta - kuaniDescuento));
   const precioTarjetaFinal  = r2(precioEfectivoFinal / (1 - comisionClip));
 
   // ── 6. PRECIO POR PERSONA ─────────────────────────────────────────────────
   const precioPorPersona = r2(precioEfectivoFinal / pax);
 
-  // ── 7. OPCIONES MSI (solo si precioVenta ≥ $7,000 — pago total) ──────────
+  // ── 7. OPCIONES MSI (tier + monto mínimo, solo pago total) ───────────────
   const msiOpciones: MSIOpcion[] = precioVenta >= MSI_MONTO_MINIMO
-    ? MSI_PLAZOS.map(plazo => {
-        const tasa = MSI_RATES[plazo];
+    ? tierConfig.msiPlazos.map(plazo => {
+        const tasa       = MSI_RATES[plazo];
         const precioTotal = r2(precioVenta / (1 - tasa));
         return {
           plazo,
@@ -181,6 +217,8 @@ export function calcularPrecio(
     precioTarjeta,
     comisionClipMonto,
     gananciaAgencia,
+    bloqueoTier,
+    fenixPointsPct,
     kuaniGenerados,
     kuaniDescuento,
     precioEfectivoFinal,
@@ -198,11 +236,14 @@ function zero(): PricingOutput {
   return {
     tarifaPublicaTotal: 0, tarifaNeta: 0, precioVenta: 0,
     precioTarjeta: 0, comisionClipMonto: 0, gananciaAgencia: 0,
+    bloqueoTier: 'BASICO', fenixPointsPct: 0.01,
     kuaniGenerados: 0, kuaniDescuento: 0,
     precioEfectivoFinal: 0, precioTarjetaFinal: 0, precioPorPersona: 0,
     msiOpciones: [],
   };
 }
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 
 /** Helper: desde datos de un bloqueo individual */
 export function calcularPrecioBloqueo(params: {
@@ -212,20 +253,20 @@ export function calcularPrecioBloqueo(params: {
   juniors: number;
   infantes: number;
   noches: number;
-  kuaniTier?: KuaniTier;
+  /** @deprecated ignorado — tier se calcula por tarifaNeta automáticamente */
+  kuaniTier?: string;
   kuaniPuntos?: number;
   config?: PricingConfig;
 }): PricingOutput {
   return calcularPrecio(
     {
-      tarifaPublicaPPPN: 0,
+      tarifaPublicaPPPN:    0,
       precioHabitacionTotal: params.precioHabitacion,
       adultos:  params.adultos,
       menores:  params.menores,
       juniors:  params.juniors,
       infantes: params.infantes,
       noches:   params.noches,
-      kuaniTier:          params.kuaniTier,
       kuaniPuntosCliente: params.kuaniPuntos,
     },
     params.config ?? PRICING_CONFIG_DEFAULT
@@ -234,14 +275,17 @@ export function calcularPrecioBloqueo(params: {
 
 /**
  * Calcula el precio para un plazo MSI específico.
- * Retorna null si el monto es menor al mínimo o el plazo no existe.
- * Solo válido para PAGO TOTAL — nunca para anticipos.
+ * Solo válido para PAGO TOTAL — nunca anticipos.
+ * Retorna null si el monto < mínimo, el plazo no existe o no aplica al tier.
  */
 export function calcularOpcionMSI(
   precioVenta: number,
+  tarifaNeta: number,
   plazo: number
 ): MSIOpcion | null {
   if (precioVenta < MSI_MONTO_MINIMO) return null;
+  const tier = getBloqueoTier(tarifaNeta);
+  if (!BLOQUEO_TIER_CONFIG[tier].msiPlazos.includes(plazo)) return null;
   const tasa = MSI_RATES[plazo];
   if (!tasa) return null;
   const precioTotal = r2(precioVenta / (1 - tasa));
@@ -252,3 +296,14 @@ export function calcularOpcionMSI(
     mensualidad: r2(precioTotal / plazo),
   };
 }
+
+// Mantener compatibilidad con código que importa KuaniTier
+export type KuaniTier = BloqueoTier;
+export const KUANI_PCT_BY_TIER = {
+  BASICO:        0.01,
+  MEDIO:         0.02,
+  PREMIUM:       0.03,
+  ESTANDAR:      0.01,
+  'PREMIUM PLUS': 0.02,
+  LUXURY:        0.03,
+} as const;
