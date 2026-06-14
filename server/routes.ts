@@ -1673,7 +1673,6 @@ export async function registerRoutes(
         SELECT
           COUNT(*)                                       AS total_bloqueos,
           SUM(habitaciones_disponibles)                  AS habitaciones_disponibles,
-          SUM(COALESCE(habitaciones_totales, 0))         AS habitaciones_totales,
           COUNT(*) FILTER (WHERE habitaciones_disponibles = 0) AS bloqueos_agotados,
           COUNT(*) FILTER (WHERE fecha_inicio = $1)      AS check_ins_hoy
         FROM bloqueos
@@ -1743,14 +1742,11 @@ export async function registerRoutes(
       res.json({
         timestamp: now.toISOString(),
         inventario: {
-          bloqueos_activos:    Number(inv.total_bloqueos),
-          habitaciones_disp:   Number(inv.habitaciones_disponibles),
-          habitaciones_total:  Number(inv.habitaciones_totales),
-          bloqueos_agotados:   Number(inv.bloqueos_agotados),
-          check_ins_hoy:       Number(inv.check_ins_hoy),
-          ocupacion_pct: inv.habitaciones_totales > 0
-            ? Math.round((1 - inv.habitaciones_disponibles / inv.habitaciones_totales) * 100)
-            : null,
+          bloqueos_activos:  Number(inv.total_bloqueos),
+          habitaciones_disp: Number(inv.habitaciones_disponibles),
+          bloqueos_agotados: Number(inv.bloqueos_agotados),
+          check_ins_hoy:     Number(inv.check_ins_hoy),
+          ocupacion_pct:     null,
         },
         top_hoteles: topHotelsResult.rows.map(r => ({
           hotel:          r.hotel,

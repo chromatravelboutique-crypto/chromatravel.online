@@ -206,7 +206,7 @@ export default function CookiePolicy() {
                   </p>
                 </li>
                 <li className="rounded-lg border p-4">
-                  <strong>PayPal / Clip</strong>
+                  <strong>Clip</strong>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Para procesar pagos de forma segura cuando realizas una reservación.
                   </p>

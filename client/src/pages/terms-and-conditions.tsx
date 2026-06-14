@@ -128,8 +128,7 @@ export default function TermsAndConditions() {
                     Aceptamos pagos a través de:
                   </p>
                   <ul className="mt-2 list-disc pl-6 space-y-1">
-                    <li>PayPal (tarjetas de crédito/débito internacionales)</li>
-                    <li>Clip (tarjetas de crédito/débito mexicanas)</li>
+                    <li>Clip (tarjetas de crédito/débito)</li>
                     <li>Transferencia bancaria (previa coordinación)</li>
                   </ul>
                 </div>

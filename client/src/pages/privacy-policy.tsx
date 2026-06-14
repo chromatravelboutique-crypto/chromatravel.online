@@ -60,7 +60,7 @@ export default function PrivacyPolicy() {
                 <div>
                   <h3 className="font-semibold">2.2 Información de Pago</h3>
                   <ul className="mt-2 list-disc pl-6 space-y-1">
-                    <li>Datos de tarjetas de crédito/débito (procesados de forma segura mediante PayPal y Clip)</li>
+                    <li>Datos de tarjetas de crédito/débito (procesados de forma segura mediante Clip)</li>
                     <li>Historial de transacciones</li>
                     <li>Información de facturación</li>
                   </ul>
@@ -104,7 +104,7 @@ export default function PrivacyPolicy() {
               </p>
               <ul className="mt-2 list-disc pl-6 space-y-2">
                 <li><strong>Proveedores de servicios:</strong> Hoteles, aerolíneas y operadores turísticos para confirmar reservaciones</li>
-                <li><strong>Procesadores de pago:</strong> PayPal y Clip para procesar transacciones de forma segura</li>
+                <li><strong>Procesadores de pago:</strong> Clip para procesar transacciones de forma segura</li>
                 <li><strong>Servicios de análisis:</strong> Google Analytics para mejorar nuestra plataforma</li>
                 <li><strong>Obligaciones legales:</strong> Cuando sea requerido por ley o autoridades competentes</li>
               </ul>
