@@ -2,8 +2,9 @@ import { getDb } from "../db";
 import { auditLogs, leadStatusHistory } from "@shared/schema";
 import type { InsertAuditLog, InsertLeadStatusHistory } from "@shared/schema";
 
-export type AuditAction = 
-  | 'create_lead' 
+export type AuditAction =
+  | 'create_lead'
+  | 'create_precompra'
   | 'update_status' 
   | 'convert_lead' 
   | 'payment_created' 

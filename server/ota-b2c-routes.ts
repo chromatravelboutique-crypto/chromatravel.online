@@ -197,7 +197,7 @@ function verifyClipSignature(payload: string, signature: string): boolean {
   }
 }
 
-async function createClipCharge(opts: {
+export async function createClipCharge(opts: {
   amountCents: number;
   description: string;
   currency?: string;
@@ -569,6 +569,22 @@ export function registerOtaB2cRoutes(app: Express) {
             await pool.query(
               `UPDATE leads SET status='converted', converted_at=NOW() WHERE id=$1`, [leadId]
             );
+
+            // Confirmar la reserva asociada (reference = primeros 8 chars del lead.id)
+            try {
+              const reservaRef = String(leadId).substring(0, 8).toUpperCase();
+              const confirmResult = await pool.query(
+                `UPDATE reservas SET status='confirmed', confirmed_at=NOW()
+                 WHERE reference=$1 AND status IN ('hold','pending_payment')
+                 RETURNING id`,
+                [reservaRef]
+              );
+              if (confirmResult.rows.length > 0) {
+                console.log(`[Clip Webhook] Reserva confirmada | ref:${reservaRef} | id:${confirmResult.rows[0].id}`);
+              }
+            } catch (rsvErr: any) {
+              console.error('[Clip Webhook] reserva confirm non-fatal:', rsvErr.message);
+            }
 
             const { auditService } = await import("./services/audit.service");
             await auditService.log("payment_created", "payment", leadId, null, {

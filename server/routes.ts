@@ -737,6 +737,21 @@ export async function registerRoutes(
         // depositAmount usa precioVenta (tarifaPublica × 0.85 × 1.05) como base real
         const depositAmount = Math.ceil(pricing.precioVenta * deposit.percent / 100);
 
+        // Crear lead ANTES de la reserva — la reserva usa lead.id como referencia
+        const leadData = {
+          name: data.name,
+          email: data.email,
+          phone: data.phone || null,
+          destination: data.hotel,
+          travelDates: `${data.checkIn.split('T')[0]} al ${data.checkOut.split('T')[0]}`,
+          message: `COTIZACION PRECOMPRA: ${data.hotel} - ${data.roomType}\nAdultos: ${data.adults}, Menores: ${data.children}, Juniors: ${data.juniors}, Infantes: ${data.infants}\nHabitaciones: ${roomsNeeded}\nTotal: $${totalPrice.toLocaleString()} MXN\nAnticipo: $${depositAmount.toLocaleString()} MXN (${deposit.percent}%)\n${data.comments ? `Comentarios: ${data.comments}` : ''}`,
+          source: "cotizador-precompra",
+          status: "hot",
+        };
+
+        const lead = await storage.createLead(leadData);
+        const ref = lead.id.substring(0, 8).toUpperCase();
+
         // Crear reserva real con hold de 30 min
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
         const reservaResult = await (async () => {
@@ -766,7 +781,7 @@ export async function registerRoutes(
               kuaniGenerados:         pricing.kuaniGenerados,
               status:                 "hold",
               expiresAt,
-              reference:              lead.id.substring(0, 8).toUpperCase(),
+              reference:              ref,
               comments:               data.comments ?? null,
               ipAddress:              (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim(),
             }).returning();
@@ -777,19 +792,34 @@ export async function registerRoutes(
           }
         })();
 
-        const leadData = {
-          name: data.name,
-          email: data.email,
-          phone: data.phone || null,
-          destination: data.hotel,
-          travelDates: `${data.checkIn.split('T')[0]} al ${data.checkOut.split('T')[0]}`,
-          message: `COTIZACION PRECOMPRA: ${data.hotel} - ${data.roomType}\nAdultos: ${data.adults}, Menores: ${data.children}, Juniors: ${data.juniors}, Infantes: ${data.infants}\nHabitaciones: ${roomsNeeded}\nTotal: $${totalPrice.toLocaleString()} MXN\nAnticipo: $${depositAmount.toLocaleString()} MXN (${deposit.percent}%)\n${data.comments ? `Comentarios: ${data.comments}` : ''}`,
-          source: "cotizador-precompra",
-          status: "hot",
-        };
-
-        const lead = await storage.createLead(leadData);
-        const ref = lead.id.substring(0, 8).toUpperCase();
+        // Crear cargo Clip para el anticipo (si Clip está configurado) — el cliente
+        // recibe un link de pago inmediato; si falla, el flujo sigue como lead manual
+        const depositTarjeta = Math.ceil(pricing.precioTarjeta * deposit.percent / 100);
+        let clipPaymentUrl: string | null = null;
+        if (process.env.CLIP_API_KEY) {
+          try {
+            const { createClipCharge } = await import("./ota-b2c-routes");
+            const referenceId = `${ref}-${Date.now()}`;
+            const charge = await createClipCharge({
+              amountCents: Math.round(depositTarjeta * 100),
+              description: `Anticipo ${data.hotel} ${data.checkIn.split('T')[0]} - ${data.checkOut.split('T')[0]} (Ref. ${ref})`,
+              referenceId,
+              customerEmail: data.email,
+              customerName: data.name,
+              currency: "MXN",
+            });
+            clipPaymentUrl = charge.payment_request_url || charge.checkout_url || null;
+            await pool.query(
+              `INSERT INTO clip_payment_intents (lead_id, charge_id, reference_id, amount_cents, status, raw_response, created_at)
+               VALUES ($1,$2,$3,$4,'pending',$5,NOW())
+               ON CONFLICT (reference_id) DO NOTHING`,
+              [lead.id, charge.id || charge.charge_id, referenceId, Math.round(depositTarjeta * 100), JSON.stringify(charge)]
+            ).catch((e: any) => console.error('[Clip] intent insert non-fatal:', e.message));
+            console.log(`[Clip] Charge created for precompra ${ref} | $${depositTarjeta} MXN`);
+          } catch (clipErr: any) {
+            console.error('[Clip] charge creation non-fatal:', clipErr.message);
+          }
+        }
 
         const { sendEmail } = await import("./email-service");
 
@@ -841,6 +871,11 @@ export async function registerRoutes(
                 <p style="font-size: 20px; font-weight: bold; color: #10b981;">Total estimado: $${totalPrice.toLocaleString()} MXN</p>
                 <p><strong>Anticipo requerido (${deposit.percent}%):</strong> $${depositAmount.toLocaleString()} MXN</p>
               </div>
+              ${clipPaymentUrl ? `
+              <div style="text-align: center; margin: 20px 0;">
+                <a href="${clipPaymentUrl}" style="display: inline-block; background: #10b981; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pagar anticipo ahora — $${depositTarjeta.toLocaleString()} MXN</a>
+                <p style="color: #666; font-size: 12px; margin-top: 8px;">Pago con tarjeta vía Clip. Tu reserva queda confirmada al pagar. El link expira en 30 minutos.</p>
+              </div>` : ''}
               <p style="color: #666; font-size: 13px;">Esta cotizacion es informativa. Los precios estan sujetos a disponibilidad al momento de confirmar.</p>
               <p style="margin-top: 30px;"><strong>Chroma Travel</strong><br><a href="mailto:contacto@chromatravel.online">contacto@chromatravel.online</a></p>
             </div>
@@ -904,11 +939,13 @@ export async function registerRoutes(
           reservaId: reservaResult?.id ?? null,
           reference: ref,
           expiresAt: expiresAt.toISOString(),
+          paymentUrl: clipPaymentUrl,
           pricing: {
             precioVenta:    pricing.precioVenta,
             precioTarjeta:  pricing.precioTarjeta,
             depositPercent: deposit.percent,
             depositAmount,
+            depositTarjeta,
             kuaniGenerados: pricing.kuaniGenerados,
           },
           message: "Cotizacion enviada exitosamente",
