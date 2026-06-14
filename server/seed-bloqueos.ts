@@ -11,9 +11,39 @@ export async function seedBloqueos(): Promise<void> {
   }
 
   try {
+    // La tabla bloqueos es raw SQL (no está en el schema Drizzle) — crearla si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bloqueos (
+        id SERIAL PRIMARY KEY,
+        hotel TEXT NOT NULL,
+        proveedor TEXT,
+        fecha_inicio DATE NOT NULL,
+        fecha_fin DATE NOT NULL,
+        tipo_habitacion TEXT,
+        tarifa_sencilla NUMERIC(10,2),
+        tarifa_doble NUMERIC(10,2),
+        tarifa_triple NUMERIC(10,2),
+        tarifa_cuadruple NUMERIC(10,2),
+        tarifa_primer_menor NUMERIC(10,2),
+        tarifa_segundo_menor NUMERIC(10,2),
+        tarifa_junior NUMERIC(10,2),
+        habitaciones_disponibles INTEGER,
+        observaciones TEXT,
+        estado TEXT DEFAULT 'Activo',
+        brand_id VARCHAR,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // Ensure brand_id column exists (idempotent — fails silently if already present)
     await pool.query(
-      `ALTER TABLE bloqueos ADD COLUMN IF NOT EXISTS brand_id INTEGER`
+      `ALTER TABLE bloqueos ADD COLUMN IF NOT EXISTS brand_id VARCHAR`
+    ).catch(() => {});
+
+    // Backfill: inventario NULL = nunca asignado (el flujo de reservas solo decrementa,
+    // nunca deja NULL) — sin esto los bloqueos son invendibles. 0 NO se toca (agotado real).
+    await pool.query(
+      `UPDATE bloqueos SET habitaciones_disponibles = 20 WHERE habitaciones_disponibles IS NULL`
     ).catch(() => {});
 
     const countResult = await pool.query(
@@ -79,7 +109,7 @@ export async function seedBloqueos(): Promise<void> {
           parseNum(row.tarifa_primer_menor),
           parseNum(row.tarifa_segundo_menor),
           parseNum(row.tarifa_junior),
-          parseNum(row.habitaciones_disponibles),
+          parseNum(row.habitaciones_disponibles) ?? 20, // CSV suele venir vacío — default 20 hab.
           row.observaciones || null,
           row.estado || "Activo",
           brandId,
@@ -90,7 +120,7 @@ export async function seedBloqueos(): Promise<void> {
 
       if (values.length > 0) {
         await pool.query(
-          `INSERT INTO bloqueos (hotel, proveedor, fecha_inicio, fecha_fin, tipo_habitacion, tarifa_sencilla, tarifa_doble, tarifa_triple, tarifa_cuadruple, tarifa_primer_menor, tarifa_segundo_menor, tarifa_junior, habitaciones_disponibles, observaciones, estado, brand_id) VALUES ${values.join(", ")}`,
+          `INSERT INTO bloqueos (hotel, proveedor, fecha_inicio, fecha_fin, tipo_habitacion, tarifa_sencilla, tarifa_doble, tarifa_triple, tarifa_cuadruple, tarifa_primer_menor, tarifa_segundo_menor, tarifa_junior, habitaciones_disponibles, observaciones, estado, brand_id) VALUES ${values.join(", ")} ON CONFLICT DO NOTHING`,
           params
         );
         inserted += values.length;

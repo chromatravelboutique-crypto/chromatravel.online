@@ -685,13 +685,18 @@ export async function registerRoutes(
       try {
         await client.query('BEGIN');
 
+        // Filtrar por marca: cada brand reserva contra SU bloqueo (mismo hotel/fechas
+        // puede existir para ambas marcas). Bloqueos sin marca son compartidos.
+        const reqBrandId: string | null = (req as any).brand?.id ?? null;
         const bloqueoResult = await client.query(
           `SELECT id, hotel, tipo_habitacion, fecha_inicio, fecha_fin, tarifa_doble, tarifa_sencilla, tarifa_triple, tarifa_cuadruple, tarifa_primer_menor, tarifa_segundo_menor, tarifa_junior, habitaciones_disponibles, observaciones
            FROM bloqueos
            WHERE estado = 'Activo' AND hotel = $1 AND tipo_habitacion = $2 AND fecha_inicio = $3 AND fecha_fin = $4
+             AND ($5::varchar IS NULL OR brand_id = $5 OR brand_id IS NULL)
+           ORDER BY (brand_id = $5) DESC NULLS LAST
            FOR UPDATE
            LIMIT 1`,
-          [data.hotel, data.roomType, data.checkIn.split('T')[0], data.checkOut.split('T')[0]]
+          [data.hotel, data.roomType, data.checkIn.split('T')[0], data.checkOut.split('T')[0], reqBrandId]
         );
 
         if (bloqueoResult.rows.length === 0) {
@@ -912,12 +917,13 @@ export async function registerRoutes(
 
         console.log(`[Precompra] ${data.name} | ${data.hotel} | $${totalPrice} MXN | Rooms: ${roomsNeeded} | Remaining: ${remainingRooms}`);
 
-        // WhatsApp admin + cliente (non-blocking)
+        // WhatsApp admin + cliente — fire-and-forget, NUNCA bloquear la respuesta
+        // (sendEmail puede colgar varios segundos si SMTP no responde)
         try {
           const { notificarReserva } = await import('./services/notification.service');
           const checkInDate = data.checkIn.split('T')[0];
           const daysToCI = Math.ceil((new Date(checkInDate).getTime() - Date.now()) / 86400000);
-          await notificarReserva({
+          void notificarReserva({
             nombre: data.name,
             email: data.email,
             telefono: data.phone || null,

@@ -84,7 +84,7 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
   }
 
   // Ensure brand_id column exists (idempotent)
-  await dbPool.query(`ALTER TABLE bloqueos ADD COLUMN IF NOT EXISTS brand_id INTEGER`).catch(() => {});
+  await dbPool.query(`ALTER TABLE bloqueos ADD COLUMN IF NOT EXISTS brand_id VARCHAR`).catch(() => {});
 
   const brandRow = await dbPool.query(
     `SELECT id FROM brands WHERE domain = 'fenixtraveler.com' LIMIT 1`
@@ -187,12 +187,14 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
     `);
   } catch (_) {}
 
-  // Try to create unique index (may fail if duplicate data exists — that's OK)
+  // Índice único POR MARCA — el mismo bloqueo (hotel/fechas/habitación) puede
+  // existir para Chroma y Fénix a la vez porque comparten inventario de origen
   let hasIndex = false;
   try {
+    await dbPool.query(`DROP INDEX IF EXISTS bloqueos_upsert_key`);
     await dbPool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS bloqueos_upsert_key
-      ON bloqueos (hotel, fecha_inicio, fecha_fin, tipo_habitacion)
+      CREATE UNIQUE INDEX IF NOT EXISTS bloqueos_upsert_brand_key
+      ON bloqueos (hotel, fecha_inicio, fecha_fin, tipo_habitacion, COALESCE(brand_id, ''))
     `);
     hasIndex = true;
   } catch (_) {
@@ -213,7 +215,7 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
             tarifa_primer_menor, tarifa_junior,
             habitaciones_disponibles, observaciones, estado, brand_id, created_at
           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
-          ON CONFLICT (hotel, fecha_inicio, fecha_fin, tipo_habitacion)
+          ON CONFLICT (hotel, fecha_inicio, fecha_fin, tipo_habitacion, COALESCE(brand_id, ''))
           DO UPDATE SET
             proveedor = EXCLUDED.proveedor,
             tarifa_sencilla = COALESCE(EXCLUDED.tarifa_sencilla, bloqueos.tarifa_sencilla),
@@ -237,8 +239,8 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
       } else {
         // Slow path: check first, then update or insert
         const existing = await dbPool.query(
-          `SELECT id FROM bloqueos WHERE hotel = $1 AND fecha_inicio = $2 AND fecha_fin = $3 AND tipo_habitacion = $4 LIMIT 1`,
-          [g.hotel, g.fecha_inicio, g.fecha_fin, g.tipo_habitacion]
+          `SELECT id FROM bloqueos WHERE hotel = $1 AND fecha_inicio = $2 AND fecha_fin = $3 AND tipo_habitacion = $4 AND COALESCE(brand_id, '') = COALESCE($5, '') LIMIT 1`,
+          [g.hotel, g.fecha_inicio, g.fecha_fin, g.tipo_habitacion, g.brand_id]
         );
         if (existing.rows.length > 0) {
           await dbPool.query(
