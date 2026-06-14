@@ -694,7 +694,6 @@ export async function registerRoutes(
         const bloqueo = bloqueoResult.rows[0];
         const { totalPrice, rooms } = serverCalculateTotal(bloqueo, data.adults, data.children, data.juniors, data.infants);
         const deposit = serverGetDeposit(data.checkIn);
-        const depositAmount = Math.ceil(totalPrice * deposit.percent / 100);
         const roomsNeeded = rooms.length;
         const availableRooms = bloqueo.habitaciones_disponibles || 0;
 
@@ -734,6 +733,9 @@ export async function registerRoutes(
           noches,
           kuaniTier,
         });
+
+        // depositAmount usa precioVenta (tarifaPublica × 0.85 × 1.05) como base real
+        const depositAmount = Math.ceil(pricing.precioVenta * deposit.percent / 100);
 
         // Crear reserva real con hold de 30 min
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
@@ -911,6 +913,36 @@ export async function registerRoutes(
           },
           message: "Cotizacion enviada exitosamente",
         });
+
+        // Acumular puntos Kuani si el email pertenece a un usuario registrado (non-blocking)
+        if (pricing.kuaniGenerados > 0 && reservaResult?.id) {
+          (async () => {
+            try {
+              const { db: drizzleDb } = await import("./db");
+              const { users, loyaltyAccounts } = await import("@shared/schema");
+              const { eq } = await import("drizzle-orm");
+              if (!drizzleDb) return;
+              const [user] = await drizzleDb.select({ id: users.id })
+                .from(users).where(eq(users.email, data.email)).limit(1);
+              if (!user) return; // guest sin cuenta — kuaniGenerados queda en reserva para atribución manual
+              const { loyaltyService } = await import('./services/loyalty');
+              const brandId = (req as any).brand?.id ?? null;
+              const account = await loyaltyService.getAccountByUser(user.id, brandId);
+              if (!account) return;
+              await loyaltyService.addPoints({
+                accountId: account.id,
+                points: pricing.kuaniGenerados,
+                type: 'earn',
+                description: `Reserva ${ref} — ${data.hotel}`,
+                referenceType: 'reserva',
+                referenceId: reservaResult.id,
+              });
+              console.log(`[Kuani] +${pricing.kuaniGenerados} pts → account ${account.id}`);
+            } catch (e) {
+              console.error('[Kuani addPoints] non-fatal:', e);
+            }
+          })();
+        }
       } catch (txError) {
         await client.query('ROLLBACK');
         throw txError;

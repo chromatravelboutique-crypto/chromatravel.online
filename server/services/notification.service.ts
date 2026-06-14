@@ -5,7 +5,7 @@
 import { sendEmail } from '../email-service';
 
 const WA_ADMIN = process.env.ADMIN_WHATSAPP || process.env.ADMIN_PHONE || '';
-const CALLMEBOT_KEY = process.env.CALLMEBOT_API_KEY || '';
+const CALLMEBOT_KEY = process.env.CALLMEBOT_APIKEY || process.env.CALLMEBOT_API_KEY || '';
 
 async function sendCallmebot(phone: string, message: string): Promise<boolean> {
   if (!CALLMEBOT_KEY) {

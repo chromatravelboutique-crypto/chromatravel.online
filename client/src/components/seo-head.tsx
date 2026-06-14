@@ -41,9 +41,12 @@ export function SEOHead({
       ? (appendBrand ? `${title} | ${brandName}` : title)
       : brand?.seoTitle || brandName;
     const metaDescription = description || brand?.seoDescription || "";
-    const canonicalUrl = canonical || window.location.href;
-    const ogImage = image || brand?.ogImage || "";
     const brandDomain = brand?.domain || "chromatravel.online";
+    const ogImage = image || brand?.ogImage || "";
+    const origin = `https://www.${brandDomain}`;
+    const canonicalUrl = canonical
+      ? (canonical.startsWith("http") ? canonical : `${origin}${canonical}`)
+      : `${origin}${window.location.pathname}`;
 
     document.title = fullTitle;
 

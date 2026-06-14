@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import compression from "compression";
-import MemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import path from "path";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -13,10 +13,11 @@ import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
 import { seedBloqueos } from "./seed-bloqueos";
 import { seedBloqueosFenix } from "./seed-bloqueos-fenix";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
-const SessionStore = MemoryStore(session);
+const PgStore = connectPgSimple(session);
 
 app.disable('x-powered-by');
 
@@ -142,9 +143,9 @@ export function log(message: string, source = "express") {
   }
 
   app.use(session({
-    store: new SessionStore({
-      checkPeriod: 86400000
-    }),
+    store: pool
+      ? new PgStore({ pool, tableName: "session", createTableIfMissing: true })
+      : new (require("memorystore")(session))({ checkPeriod: 86400000 }),
     secret: sessionSecret || "dev-only-secret-not-for-production",
     resave: false,
     saveUninitialized: false,
