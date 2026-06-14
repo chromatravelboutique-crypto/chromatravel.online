@@ -702,6 +702,30 @@ function CotizadorModal({
                         </p>
                       </div>
                     </div>
+
+                    {/* MSI — solo si pago total y monto ≥ $7,000 */}
+                    {deposit.percent === 100 && pricing.msiOpciones.length > 0 && (
+                      <div className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 space-y-1">
+                        <p className="text-xs font-semibold text-purple-700">📅 Meses sin intereses (pago total)</p>
+                        <div className="grid grid-cols-2 gap-1">
+                          {pricing.msiOpciones.map(op => (
+                            <div key={op.plazo} className="flex items-center justify-between rounded bg-white border border-purple-100 px-2 py-1">
+                              <span className="text-xs font-medium text-purple-800">{op.plazo} MSI</span>
+                              <div className="text-right">
+                                <p className="text-xs font-bold text-purple-900">{formatPrice(op.mensualidad)}/mes</p>
+                                <p className="text-[10px] text-purple-500">Total {formatPrice(op.precioTotal)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-purple-500">El cliente no paga intereses. La sobretasa ya está incluida en el precio.</p>
+                      </div>
+                    )}
+                    {deposit.percent < 100 && pricing.precioVenta >= 7000 && (
+                      <p className="text-[10px] text-muted-foreground text-center">
+                        💡 MSI disponible solo en pago total
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between font-bold text-base">

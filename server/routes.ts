@@ -947,6 +947,9 @@ export async function registerRoutes(
           console.error('[notificarReserva] non-fatal:', waErr);
         }
 
+        // MSI: solo disponible en pago total (deposit.percent === 100) y monto ≥ $7,000
+        const msiDisponible = deposit.percent === 100 && pricing.msiOpciones.length > 0;
+
         res.status(201).json({
           success: true,
           leadId: lead.id,
@@ -961,6 +964,8 @@ export async function registerRoutes(
             depositAmount,
             depositTarjeta,
             kuaniGenerados: pricing.kuaniGenerados,
+            msiDisponible,
+            msiOpciones:    msiDisponible ? pricing.msiOpciones : [],
           },
           message: "Cotizacion enviada exitosamente",
         });
