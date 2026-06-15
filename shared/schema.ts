@@ -655,11 +655,11 @@ export const payments = pgTable("payments", {
   paypalOrderId: text("paypal_order_id"),
   paypalCaptureId: text("paypal_capture_id"),
   paypalPayerId: text("paypal_payer_id"),
-  
+
   amount: text("amount").notNull(),
   currency: text("currency").notNull().default("MXN"),
   status: text("status").notNull().default("pending"),
-  method: text("method").notNull().default("paypal"),
+  method: text("method").notNull().default("clip"),
   
   metadata: text("metadata"),
   errorMessage: text("error_message"),

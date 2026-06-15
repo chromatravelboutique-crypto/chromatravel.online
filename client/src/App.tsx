@@ -91,6 +91,7 @@ function Router() {
       <Route path="/admin/tbo/certification" component={AdminTBOCertification} />
       <Route path="/admin/crm" component={AdminCRM} />
       <Route path="/admin/inventory" component={AdminInventory} />
+      <Route path="/admin/metrics" component={AdminMetrics} />
       <Route path="/dashboard/:section" component={Dashboard} />
       <Route path="/account" component={AccountPage} />
       <Route path="/account/:section" component={AccountPage} />

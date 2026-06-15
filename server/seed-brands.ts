@@ -2,6 +2,7 @@ import { db } from "./db";
 import { brands, users } from "@shared/schema";
 import { hash } from "bcrypt";
 import { eq } from "drizzle-orm";
+import crypto from "crypto";
 
 const initialBrands = [
   {
@@ -224,8 +225,10 @@ async function seedAdminUsers() {
     }
   ];
   
-  // Use environment variable for admin password, fallback to secure default
-  const adminPassword = process.env.ADMIN_PASSWORD || "ChromaAdmin2024!";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? crypto.randomBytes(16).toString("hex");
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn("[seed-brands] ADMIN_PASSWORD not set — generated random password for admin accounts");
+  }
   const hashedPassword = await hash(adminPassword, 10);
   
   for (const adminData of adminUsers) {

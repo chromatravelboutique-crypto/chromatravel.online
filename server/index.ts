@@ -106,7 +106,29 @@ export function log(message: string, source = "express") {
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
-  
+
+  // ── CORS — lista blanca de orígenes permitidos ────────────────────────────
+  const ALLOWED_ORIGINS = new Set([
+    "https://chromatravel.online",
+    "https://www.chromatravel.online",
+    "https://fenixtraveler.com",
+    "https://www.fenixtraveler.com",
+  ]);
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && ALLOWED_ORIGINS.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+      res.setHeader("Vary", "Origin");
+    }
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     // Allow iframe embedding for bloqueos widget
@@ -115,6 +137,17 @@ export function log(message: string, source = "express") {
       res.setHeader('Content-Security-Policy', "frame-ancestors *");
     } else {
       res.setHeader("X-Frame-Options", "SAMEORIGIN");
+      res.setHeader(
+        "Content-Security-Policy",
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' googletagmanager.com google-analytics.com",
+          "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+          "font-src 'self' fonts.gstatic.com",
+          "img-src 'self' data: https:",
+          "connect-src 'self' api.anthropic.com",
+        ].join("; ")
+      );
     }
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     if (process.env.NODE_ENV === "production") {

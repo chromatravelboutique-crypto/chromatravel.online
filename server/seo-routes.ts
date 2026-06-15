@@ -1,14 +1,7 @@
 import type { Express, Request, Response } from "express";
-import { db } from "./db";
+import { getDb } from "./db";
 import { destinations, blogPosts, hotels, brands } from "@shared/schema";
 import { eq, and, or, isNull } from "drizzle-orm";
-
-function getDatabase() {
-  if (!db) {
-    throw new Error("Database not available");
-  }
-  return db;
-}
 
 // Generate sitemap.xml dynamically based on brand
 export function generateSitemap(baseUrl: string, pages: Array<{ url: string; lastmod?: string; changefreq?: string; priority?: number }>) {
@@ -189,7 +182,7 @@ export function registerSeoRoutes(app: Express) {
       );
 
       // Destinations (brand-scoped)
-      const allDestinations = await getDatabase().select().from(destinations).where(destinationFilter);
+      const allDestinations = await getDb().select().from(destinations).where(destinationFilter);
       for (const dest of allDestinations) {
         if (dest.slug) {
           pages.push({
@@ -218,7 +211,7 @@ export function registerSeoRoutes(app: Express) {
 
       // Blog posts from database
       try {
-        const allPosts = await getDatabase().select().from(blogPosts).where(blogFilter);
+        const allPosts = await getDb().select().from(blogPosts).where(blogFilter);
         for (const post of allPosts) {
           const existingUrl = pages.find(p => p.url === `/blog/${post.slug}`);
           if (!existingUrl) {
@@ -253,7 +246,7 @@ export function registerSeoRoutes(app: Express) {
       }
 
       // Hotels (brand-scoped)
-      const allHotels = await getDatabase().select().from(hotels).where(hotelFilter);
+      const allHotels = await getDb().select().from(hotels).where(hotelFilter);
       for (const hotel of allHotels) {
         pages.push({
           url: `/hotels/${hotel.id}`,

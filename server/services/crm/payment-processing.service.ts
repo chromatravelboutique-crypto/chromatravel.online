@@ -74,7 +74,6 @@ export async function processClipPayment(
       brandId,
       bookingId,
       invoiceId: newInvoice.id,
-      paypalOrderId: chargeId,
       amount,
       currency,
       status: "completed",

@@ -12,6 +12,7 @@ import * as XLSX from "xlsx";
 import { parse as csvParse } from "csv-parse/sync";
 import crypto from "crypto";
 import { z } from "zod";
+import { requireAdmin } from "./auth-middleware";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -33,11 +34,8 @@ const upload = multer({
   },
 });
 
-// ─── Auth middleware (mirrors existing pattern) ───────────────────────────────
-function requireAdmin(req: any, res: Response, next: any) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-  if (!["admin"].includes(req.session?.userRole)) return res.status(403).json({ error: "Admin required" });
-  next();
+function sanitizeInput(str: string): string {
+  return str.replace(/[<>"'&]/g, "").trim();
 }
 
 // ─── INVENTORY LOG helper ─────────────────────────────────────────────────────
@@ -452,6 +450,8 @@ export function registerOtaB2cRoutes(app: Express) {
     }
 
     const data = parsed.data;
+    const hotel = sanitizeInput(data.hotel);
+    const customerName = sanitizeInput(data.customerName);
     const depositAmount = Math.ceil(data.totalAmount * data.depositPercent / 100);
     const amountCents = Math.round(depositAmount * 100);
     const referenceId = `${data.leadId.substring(0, 8).toUpperCase()}-${Date.now()}`;
@@ -459,10 +459,10 @@ export function registerOtaB2cRoutes(app: Express) {
     try {
       const charge = await createClipCharge({
         amountCents,
-        description: `Anticipo ${data.hotel} ${data.checkIn} - ${data.checkOut}`,
+        description: `Anticipo ${hotel} ${data.checkIn} - ${data.checkOut}`,
         referenceId,
         customerEmail: data.customerEmail,
-        customerName: data.customerName,
+        customerName,
         currency: "MXN",
       });
 
