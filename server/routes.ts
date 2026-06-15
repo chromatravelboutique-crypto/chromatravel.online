@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { registerOtaB2cRoutes } from "./ota-b2c-routes";
+import { scoreLeadData } from "./services/crm/lead-scoring.service";
 import { calcularPrecioBloqueo, type KuaniTier } from "@shared/pricing-engine";
 import { storage } from "./storage";
 import { insertLeadSchema, insertBookingSchema, insertUserSchema, searchFiltersSchema, loginSchema } from "@shared/schema";
@@ -29,6 +30,7 @@ import { sendEmail as sendCrmEmail, generateBirthdayEmail, generatePromoEmail, g
 import { readFeed, detectNewArticles, checkAndPublishNewContent, generateSocialButtons } from "./crm/rss-social";
 import { generateReceipt, generateProforma as generateProformaPdf, generateQRCode } from "./crm/document-generator";
 import { sendWhatsAppMessage, generateBookingWhatsAppMessage, generatePromoWhatsAppMessage, generateBirthdayWhatsAppMessage } from "./crm/whatsapp";
+import { getDb, getPool } from "./db";
 import path from "path";
 import fs from "fs";
 
@@ -149,21 +151,6 @@ const crmWhatsAppBirthdaySchema = z.object({
   codigoDescuento: z.string().optional(),
   brandCode: z.enum(['fenix', 'chroma']).optional()
 });
-
-function scoreLeadData(data: { phone?: string | null; destination?: string | null; travelDates?: string | null; message?: string | null; source?: string | null }): { points: number; category: 'HOT' | 'WARM' | 'COLD' } {
-  let points = 0;
-  if (data.phone) points += 25;
-  if (data.destination) points += 20;
-  if (data.travelDates) points += 20;
-  if (data.message && data.message.length > 10) points += 15;
-  if (data.source === 'whatsapp' || data.source === 'referral') points += 10;
-  if (data.source === 'widget-cotizador' || data.source === 'exit-intent') points += 5;
-  points += 10;
-  let category: 'HOT' | 'WARM' | 'COLD' = 'COLD';
-  if (points >= 70) category = 'HOT';
-  else if (points >= 40) category = 'WARM';
-  return { points, category };
-}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -425,10 +412,18 @@ export async function registerRoutes(
       const diversify = req.query.diversify === "true";
 
       const today = new Date().toISOString().split("T")[0];
+      const brandId: number | null = (req as any).brand?.id ?? null;
       const baseWhere = `WHERE estado = 'Activo' AND fecha_inicio >= '${today}'`;
       let whereClause = baseWhere;
       const params: any[] = [];
       let paramIdx = 1;
+
+      // Filter by brand when brand_id column exists and brand is resolved
+      if (brandId) {
+        whereClause += ` AND (brand_id = $${paramIdx} OR brand_id IS NULL)`;
+        params.push(brandId);
+        paramIdx++;
+      }
 
       if (hotel) {
         whereClause += ` AND LOWER(hotel) LIKE $${paramIdx}`;
@@ -677,13 +672,18 @@ export async function registerRoutes(
       try {
         await client.query('BEGIN');
 
+        // Filtrar por marca: cada brand reserva contra SU bloqueo (mismo hotel/fechas
+        // puede existir para ambas marcas). Bloqueos sin marca son compartidos.
+        const reqBrandId: string | null = (req as any).brand?.id ?? null;
         const bloqueoResult = await client.query(
           `SELECT id, hotel, tipo_habitacion, fecha_inicio, fecha_fin, tarifa_doble, tarifa_sencilla, tarifa_triple, tarifa_cuadruple, tarifa_primer_menor, tarifa_segundo_menor, tarifa_junior, habitaciones_disponibles, observaciones
            FROM bloqueos
            WHERE estado = 'Activo' AND hotel = $1 AND tipo_habitacion = $2 AND fecha_inicio = $3 AND fecha_fin = $4
+             AND ($5::varchar IS NULL OR brand_id = $5 OR brand_id IS NULL)
+           ORDER BY (brand_id = $5) DESC NULLS LAST
            FOR UPDATE
            LIMIT 1`,
-          [data.hotel, data.roomType, data.checkIn.split('T')[0], data.checkOut.split('T')[0]]
+          [data.hotel, data.roomType, data.checkIn.split('T')[0], data.checkOut.split('T')[0], reqBrandId]
         );
 
         if (bloqueoResult.rows.length === 0) {
@@ -694,7 +694,6 @@ export async function registerRoutes(
         const bloqueo = bloqueoResult.rows[0];
         const { totalPrice, rooms } = serverCalculateTotal(bloqueo, data.adults, data.children, data.juniors, data.infants);
         const deposit = serverGetDeposit(data.checkIn);
-        const depositAmount = Math.ceil(totalPrice * deposit.percent / 100);
         const roomsNeeded = rooms.length;
         const availableRooms = bloqueo.habitaciones_disponibles || 0;
 
@@ -726,7 +725,7 @@ export async function registerRoutes(
           ? kuaniTierRaw
           : kuaniTierRaw.includes('PREMIUM') ? 'PREMIUM' : 'ESTANDAR') as KuaniTier;
         const pricing = calcularPrecioBloqueo({
-          precioHabitacion: totalPrice,
+          precioHabitacion: totalPrice * noches,
           adultos: data.adults,
           menores: data.children,
           juniors: data.juniors,
@@ -735,11 +734,29 @@ export async function registerRoutes(
           kuaniTier,
         });
 
+        // depositAmount usa precioVenta (tarifaPublica × 0.85 × 1.05) como base real
+        const depositAmount = Math.ceil(pricing.precioVenta * deposit.percent / 100);
+
+        // Crear lead ANTES de la reserva — la reserva usa lead.id como referencia
+        const leadData = {
+          name: data.name,
+          email: data.email,
+          phone: data.phone || null,
+          destination: data.hotel,
+          travelDates: `${data.checkIn.split('T')[0]} al ${data.checkOut.split('T')[0]}`,
+          message: `COTIZACION PRECOMPRA: ${data.hotel} - ${data.roomType}\nAdultos: ${data.adults}, Menores: ${data.children}, Juniors: ${data.juniors}, Infantes: ${data.infants}\nHabitaciones: ${roomsNeeded}\nTotal: $${totalPrice.toLocaleString()} MXN\nAnticipo: $${depositAmount.toLocaleString()} MXN (${deposit.percent}%)\n${data.comments ? `Comentarios: ${data.comments}` : ''}`,
+          source: "cotizador-precompra",
+          status: "hot",
+        };
+
+        const lead = await storage.createLead(leadData);
+        const ref = lead.id.substring(0, 8).toUpperCase();
+
         // Crear reserva real con hold de 30 min
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
         const reservaResult = await (async () => {
           try {
-            const { db } = await import("./db");
+            const { getDb } = await import("./db"); const db = getDb();
             const { reservas } = await import("@shared/schema");
             const [reserva] = await db.insert(reservas).values({
               brandId:                (req as any).brand?.id ?? null,
@@ -764,7 +781,7 @@ export async function registerRoutes(
               kuaniGenerados:         pricing.kuaniGenerados,
               status:                 "hold",
               expiresAt,
-              reference:              lead.id.substring(0, 8).toUpperCase(),
+              reference:              ref,
               comments:               data.comments ?? null,
               ipAddress:              (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim(),
             }).returning();
@@ -775,19 +792,34 @@ export async function registerRoutes(
           }
         })();
 
-        const leadData = {
-          name: data.name,
-          email: data.email,
-          phone: data.phone || null,
-          destination: data.hotel,
-          travelDates: `${data.checkIn.split('T')[0]} al ${data.checkOut.split('T')[0]}`,
-          message: `COTIZACION PRECOMPRA: ${data.hotel} - ${data.roomType}\nAdultos: ${data.adults}, Menores: ${data.children}, Juniors: ${data.juniors}, Infantes: ${data.infants}\nHabitaciones: ${roomsNeeded}\nTotal: $${totalPrice.toLocaleString()} MXN\nAnticipo: $${depositAmount.toLocaleString()} MXN (${deposit.percent}%)\n${data.comments ? `Comentarios: ${data.comments}` : ''}`,
-          source: "cotizador-precompra",
-          status: "hot",
-        };
-
-        const lead = await storage.createLead(leadData);
-        const ref = lead.id.substring(0, 8).toUpperCase();
+        // Crear cargo Clip para el anticipo (si Clip está configurado) — el cliente
+        // recibe un link de pago inmediato; si falla, el flujo sigue como lead manual
+        const depositTarjeta = Math.ceil(pricing.precioTarjeta * deposit.percent / 100);
+        let clipPaymentUrl: string | null = null;
+        if (process.env.CLIP_API_KEY) {
+          try {
+            const { createClipCharge } = await import("./ota-b2c-routes");
+            const referenceId = `${ref}-${Date.now()}`;
+            const charge = await createClipCharge({
+              amountCents: Math.round(depositTarjeta * 100),
+              description: `Anticipo ${data.hotel} ${data.checkIn.split('T')[0]} - ${data.checkOut.split('T')[0]} (Ref. ${ref})`,
+              referenceId,
+              customerEmail: data.email,
+              customerName: data.name,
+              currency: "MXN",
+            });
+            clipPaymentUrl = charge.payment_request_url || charge.checkout_url || null;
+            await pool.query(
+              `INSERT INTO clip_payment_intents (lead_id, charge_id, reference_id, amount_cents, status, raw_response, created_at)
+               VALUES ($1,$2,$3,$4,'pending',$5,NOW())
+               ON CONFLICT (reference_id) DO NOTHING`,
+              [lead.id, charge.id || charge.charge_id, referenceId, Math.round(depositTarjeta * 100), JSON.stringify(charge)]
+            ).catch((e: any) => console.error('[Clip] intent insert non-fatal:', e.message));
+            console.log(`[Clip] Charge created for precompra ${ref} | $${depositTarjeta} MXN`);
+          } catch (clipErr: any) {
+            console.error('[Clip] charge creation non-fatal:', clipErr.message);
+          }
+        }
 
         const { sendEmail } = await import("./email-service");
 
@@ -822,25 +854,41 @@ export async function registerRoutes(
           replyTo: data.email,
         }).catch(err => console.error("Error sending staff notification:", err));
 
+        const reqBrand = (req as any).brand;
+        const brandName    = reqBrand?.name       || "Chroma Travel";
+        const brandEmail   = reqBrand?.email      || "contacto@chromatravel.online";
+        const brandWa      = reqBrand?.whatsappNumber || "+524434044104";
+        const brandColor   = reqBrand?.primaryColor   || "#10b981";
+        const holdExpiry   = expiresAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+
         const customerHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #10b981, #ec4899); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0;">Tu Cotizacion de Viaje</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0;">Referencia: ${ref}</p>
+            <div style="background: ${brandColor}; padding: 30px; text-align: center;">
+              <h1 style="color: white; margin: 0;">${brandName}</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0;">Tu cotización · Referencia: ${ref}</p>
             </div>
             <div style="padding: 30px; background: #f9f9f9;">
               <p>Hola <strong>${data.name}</strong>,</p>
-              <p>Recibimos tu solicitud de cotizacion. Un asesor revisara la disponibilidad y te contactara pronto.</p>
+              <p>Reservamos tu lugar por <strong>30 minutos</strong> (hasta las <strong>${holdExpiry}</strong>). Completa el pago para confirmar tu reserva.</p>
               <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #10b981;">${data.hotel}</h3>
+                <h3 style="margin-top: 0; color: ${brandColor};">${data.hotel}</h3>
                 <p><strong>Habitacion:</strong> ${data.roomType}</p>
                 <p><strong>Fechas:</strong> ${data.checkIn.split('T')[0]} al ${data.checkOut.split('T')[0]}</p>
                 <p><strong>Viajeros:</strong> ${data.adults} adultos${data.children > 0 ? `, ${data.children} menores` : ''}${data.juniors > 0 ? `, ${data.juniors} juniors` : ''}${data.infants > 0 ? `, ${data.infants} infantes` : ''}</p>
-                <p style="font-size: 20px; font-weight: bold; color: #10b981;">Total estimado: $${totalPrice.toLocaleString()} MXN</p>
+                <p style="font-size: 20px; font-weight: bold; color: ${brandColor};">Total estimado: $${totalPrice.toLocaleString()} MXN</p>
                 <p><strong>Anticipo requerido (${deposit.percent}%):</strong> $${depositAmount.toLocaleString()} MXN</p>
               </div>
-              <p style="color: #666; font-size: 13px;">Esta cotizacion es informativa. Los precios estan sujetos a disponibilidad al momento de confirmar.</p>
-              <p style="margin-top: 30px;"><strong>Chroma Travel</strong><br><a href="mailto:contacto@chromatravel.online">contacto@chromatravel.online</a></p>
+              ${clipPaymentUrl ? `
+              <div style="text-align: center; margin: 20px 0;">
+                <a href="${clipPaymentUrl}" style="display: inline-block; background: ${brandColor}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pagar anticipo ahora — $${depositTarjeta.toLocaleString()} MXN</a>
+                <p style="color: #666; font-size: 12px; margin-top: 8px;">Pago con tarjeta vía Clip. Tu reserva queda confirmada al pagar. El link expira a las ${holdExpiry}.</p>
+              </div>` : `
+              <div style="background: #fff3e0; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; font-weight: bold;">¿Dudas? Escríbenos por WhatsApp</p>
+                <p style="margin: 8px 0 0;"><a href="https://wa.me/${brandWa.replace(/\D/g,"")}" style="color: ${brandColor}; font-size: 18px;">${brandWa}</a></p>
+              </div>`}
+              <p style="color: #666; font-size: 13px;">Los precios estan sujetos a disponibilidad al momento de confirmar.</p>
+              <p style="margin-top: 30px;"><strong>${brandName}</strong><br><a href="mailto:${brandEmail}">${brandEmail}</a>${brandWa ? ` · WhatsApp: ${brandWa}` : ''}</p>
             </div>
           </div>
         `;
@@ -867,12 +915,13 @@ export async function registerRoutes(
 
         console.log(`[Precompra] ${data.name} | ${data.hotel} | $${totalPrice} MXN | Rooms: ${roomsNeeded} | Remaining: ${remainingRooms}`);
 
-        // WhatsApp admin + cliente (non-blocking)
+        // WhatsApp admin + cliente — fire-and-forget, NUNCA bloquear la respuesta
+        // (sendEmail puede colgar varios segundos si SMTP no responde)
         try {
           const { notificarReserva } = await import('./services/notification.service');
           const checkInDate = data.checkIn.split('T')[0];
           const daysToCI = Math.ceil((new Date(checkInDate).getTime() - Date.now()) / 86400000);
-          await notificarReserva({
+          void notificarReserva({
             nombre: data.name,
             email: data.email,
             telefono: data.phone || null,
@@ -896,21 +945,58 @@ export async function registerRoutes(
           console.error('[notificarReserva] non-fatal:', waErr);
         }
 
+        // MSI: solo disponible en pago total (deposit.percent === 100) y monto ≥ $7,000
+        const msiDisponible = deposit.percent === 100 && pricing.msiOpciones.length > 0;
+
         res.status(201).json({
           success: true,
           leadId: lead.id,
           reservaId: reservaResult?.id ?? null,
           reference: ref,
           expiresAt: expiresAt.toISOString(),
+          paymentUrl: clipPaymentUrl,
           pricing: {
             precioVenta:    pricing.precioVenta,
             precioTarjeta:  pricing.precioTarjeta,
             depositPercent: deposit.percent,
             depositAmount,
+            depositTarjeta,
             kuaniGenerados: pricing.kuaniGenerados,
+            msiDisponible,
+            msiOpciones:    msiDisponible ? pricing.msiOpciones : [],
           },
           message: "Cotizacion enviada exitosamente",
         });
+
+        // Acumular puntos Kuani si el email pertenece a un usuario registrado (non-blocking)
+        if (pricing.kuaniGenerados > 0 && reservaResult?.id) {
+          (async () => {
+            try {
+              const { db: drizzleDb } = await import("./db");
+              const { users, loyaltyAccounts } = await import("@shared/schema");
+              const { eq } = await import("drizzle-orm");
+              if (!drizzleDb) return;
+              const [user] = await drizzleDb.select({ id: users.id })
+                .from(users).where(eq(users.email, data.email)).limit(1);
+              if (!user) return; // guest sin cuenta — kuaniGenerados queda en reserva para atribución manual
+              const { loyaltyService } = await import('./services/loyalty');
+              const brandId = (req as any).brand?.id ?? null;
+              const account = await loyaltyService.getAccountByUser(user.id, brandId);
+              if (!account) return;
+              await loyaltyService.addPoints({
+                accountId: account.id,
+                points: pricing.kuaniGenerados,
+                type: 'earn',
+                description: `Reserva ${ref} — ${data.hotel}`,
+                referenceType: 'reserva',
+                referenceId: reservaResult.id,
+              });
+              console.log(`[Kuani] +${pricing.kuaniGenerados} pts → account ${account.id}`);
+            } catch (e) {
+              console.error('[Kuani addPoints] non-fatal:', e);
+            }
+          })();
+        }
       } catch (txError) {
         await client.query('ROLLBACK');
         throw txError;
@@ -1082,7 +1168,7 @@ export async function registerRoutes(
 
   app.get("/api/reservas/:id", async (req, res) => {
     try {
-      const { db } = await import("./db");
+      const { getDb } = await import("./db"); const db = getDb();
       const { reservas } = await import("@shared/schema");
       const { eq } = await import("drizzle-orm");
       const [reserva] = await db.select().from(reservas).where(eq(reservas.id, req.params.id)).limit(1);
@@ -1102,7 +1188,7 @@ export async function registerRoutes(
 
   app.post("/api/reservas/:id/cancel", async (req, res) => {
     try {
-      const { db } = await import("./db");
+      const { getDb } = await import("./db"); const db = getDb();
       const { reservas } = await import("@shared/schema");
       const { eq, and, inArray } = await import("drizzle-orm");
       const { getPool } = await import("./db");
@@ -1147,7 +1233,7 @@ export async function registerRoutes(
       const { paymentMethod, paymentIntentId } = req.body;
       if (!paymentMethod) return res.status(400).json({ message: "paymentMethod requerido" });
 
-      const { db } = await import("./db");
+      const { getDb } = await import("./db"); const db = getDb();
       const { reservas } = await import("@shared/schema");
       const { eq } = await import("drizzle-orm");
 
@@ -1239,6 +1325,101 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid lead data", errors: error.errors });
       }
       res.status(500).json({ message: "Error creating lead" });
+    }
+  });
+
+  // ─── Grupos y Bodas ───────────────────────────────────────────────────────────
+
+  const grupoSchema = z.object({
+    nombre:         z.string().min(2).max(120),
+    telefono:       z.string().min(8).max(20),
+    email:          z.string().email(),
+    destino:        z.string().min(2).max(120),
+    personas:       z.number().int().min(15).max(500),
+    fechaAprox:     z.string().min(3).max(60),
+    presupuestoPax: z.string().min(1).max(60),
+    comentarios:    z.string().max(1000).optional(),
+  });
+
+  app.post("/api/leads/grupo", async (req, res) => {
+    try {
+      const parsed = grupoSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.errors });
+
+      const d = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { leads: leadsTable } = await import("@shared/schema");
+      const [lead] = await db.insert(leadsTable).values({
+        brandId,
+        name:        sanitizeInput(d.nombre),
+        email:       d.email.trim().toLowerCase(),
+        phone:       sanitizeInput(d.telefono),
+        destination: sanitizeInput(d.destino),
+        travelDates: sanitizeInput(d.fechaAprox),
+        message:     `GRUPO (${d.personas} personas) | Presupuesto/pax: ${d.presupuestoPax}${d.comentarios ? ` | ${sanitizeInput(d.comentarios)}` : ""}`,
+        source:      "formulario-grupos",
+        status:      "hot",
+      }).returning();
+
+      const msg = `👥 NUEVO LEAD GRUPO\n━━━━━━━━━━━━━━━\n👤 ${d.nombre}\n📱 ${d.telefono}\n📧 ${d.email}\n🌍 ${d.destino}\n👥 ${d.personas} personas\n📅 ${d.fechaAprox}\n💰 ${d.presupuestoPax}/pax${d.comentarios ? `\n💬 ${d.comentarios}` : ""}`;
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(brandCode, msg);
+
+      console.log(`[Grupos] Lead ${lead.id} | ${d.nombre} | ${d.personas} pax | ${d.destino}`);
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (err: any) {
+      console.error("[Grupos] error:", err.message);
+      return res.status(500).json({ error: "Error al registrar solicitud de grupo" });
+    }
+  });
+
+  const bodaSchema = z.object({
+    novios:       z.string().min(2).max(200),
+    telefono:     z.string().min(8).max(20),
+    email:        z.string().email(),
+    destino:      z.string().min(2).max(120),
+    fechaTentativa: z.string().min(3).max(60),
+    invitados:    z.number().int().min(1).max(1000),
+    presupuesto:  z.string().min(1).max(60),
+    hotelEnMente: z.string().max(200).optional(),
+    comentarios:  z.string().max(1000).optional(),
+  });
+
+  app.post("/api/leads/boda", async (req, res) => {
+    try {
+      const parsed = bodaSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.errors });
+
+      const d = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { leads: leadsTable } = await import("@shared/schema");
+      const [lead] = await db.insert(leadsTable).values({
+        brandId,
+        name:        sanitizeInput(d.novios),
+        email:       d.email.trim().toLowerCase(),
+        phone:       sanitizeInput(d.telefono),
+        destination: sanitizeInput(d.destino),
+        travelDates: sanitizeInput(d.fechaTentativa),
+        message:     `BODA (${d.invitados} invitados) | Presupuesto: ${d.presupuesto}${d.hotelEnMente ? ` | Hotel: ${sanitizeInput(d.hotelEnMente)}` : ""}${d.comentarios ? ` | ${sanitizeInput(d.comentarios)}` : ""}`,
+        source:      "formulario-bodas",
+        status:      "hot",
+      }).returning();
+
+      const msg = `💍 NUEVO LEAD BODA\n━━━━━━━━━━━━━━━\n💑 ${d.novios}\n📱 ${d.telefono}\n📧 ${d.email}\n🌍 ${d.destino}\n📅 ${d.fechaTentativa}\n👥 ${d.invitados} invitados\n💰 ${d.presupuesto}${d.hotelEnMente ? `\n🏨 ${d.hotelEnMente}` : ""}${d.comentarios ? `\n💬 ${d.comentarios}` : ""}`;
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(brandCode, msg);
+
+      console.log(`[Bodas] Lead ${lead.id} | ${d.novios} | ${d.invitados} inv | ${d.destino}`);
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (err: any) {
+      console.error("[Bodas] error:", err.message);
+      return res.status(500).json({ error: "Error al registrar solicitud de boda" });
     }
   });
 
@@ -1574,12 +1755,12 @@ export async function registerRoutes(
   // ── ERP DASHBOARD — métricas reales de inventario y revenue ─────────────────
   app.get("/api/admin/erp/dashboard", requireAgentOrAdmin, async (req, res) => {
     try {
-      const { getPool } = await import("./db");
-      const { db: ormDb } = await import("./db");
+      const { getPool, getDb } = await import("./db");
       const { reservas: reservasTable } = await import("@shared/schema");
       const { count, sum, sql: sqlExpr, eq, and, gte, lt, inArray } = await import("drizzle-orm");
       const pool = getPool();
       if (!pool) return res.status(503).json({ error: "DB not available" });
+      const ormDb = getDb();
 
       const now = new Date();
       const todayStr = now.toISOString().split("T")[0];
@@ -1590,7 +1771,6 @@ export async function registerRoutes(
         SELECT
           COUNT(*)                                       AS total_bloqueos,
           SUM(habitaciones_disponibles)                  AS habitaciones_disponibles,
-          SUM(COALESCE(habitaciones_totales, 0))         AS habitaciones_totales,
           COUNT(*) FILTER (WHERE habitaciones_disponibles = 0) AS bloqueos_agotados,
           COUNT(*) FILTER (WHERE fecha_inicio = $1)      AS check_ins_hoy
         FROM bloqueos
@@ -1660,14 +1840,11 @@ export async function registerRoutes(
       res.json({
         timestamp: now.toISOString(),
         inventario: {
-          bloqueos_activos:    Number(inv.total_bloqueos),
-          habitaciones_disp:   Number(inv.habitaciones_disponibles),
-          habitaciones_total:  Number(inv.habitaciones_totales),
-          bloqueos_agotados:   Number(inv.bloqueos_agotados),
-          check_ins_hoy:       Number(inv.check_ins_hoy),
-          ocupacion_pct: inv.habitaciones_totales > 0
-            ? Math.round((1 - inv.habitaciones_disponibles / inv.habitaciones_totales) * 100)
-            : null,
+          bloqueos_activos:  Number(inv.total_bloqueos),
+          habitaciones_disp: Number(inv.habitaciones_disponibles),
+          bloqueos_agotados: Number(inv.bloqueos_agotados),
+          check_ins_hoy:     Number(inv.check_ins_hoy),
+          ocupacion_pct:     null,
         },
         top_hoteles: topHotelsResult.rows.map(r => ({
           hotel:          r.hotel,
@@ -3688,7 +3865,14 @@ export async function registerRoutes(
       
       const { auditService } = await import("./services/audit.service");
       await auditService.logLeadStatusChange(leadId, oldStatus, status, req.session?.userId);
-      
+
+      // Pipeline automation — fire and forget
+      if (status !== oldStatus && lead) {
+        const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+        const brandCode = req.brand?.code || "chroma";
+        leadCampaignService.triggerPipelineAutomation(leadId, status, brandCode).catch(() => {});
+      }
+
       res.json(lead);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3767,13 +3951,13 @@ export async function registerRoutes(
       const dataQuery = `SELECT * FROM bloqueos ${whereClause} ORDER BY hotel, fecha_inicio LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
       const dataParams = [...params, limit, offset];
       
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const [countResult, dataResult] = await Promise.all([
         pool.query(countQuery, params),
         pool.query(dataQuery, dataParams),
       ]);
-      await pool.end();
       
       const total = parseInt(countResult.rows[0].count);
       
@@ -3791,10 +3975,10 @@ export async function registerRoutes(
 
   app.get("/api/admin/bloqueos/hotels", requireAgentOrAdmin, async (req, res) => {
     try {
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const result = await pool.query('SELECT DISTINCT hotel, proveedor, COUNT(*) as total_bloqueos FROM bloqueos WHERE estado = $1 GROUP BY hotel, proveedor ORDER BY hotel', ['Activo']);
-      await pool.end();
       res.json(result.rows);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3807,8 +3991,9 @@ export async function registerRoutes(
   
   app.get("/api/admin/audit-logs", requireAdminRole, async (req, res) => {
     try {
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const limit = parseInt(req.query.limit as string) || 50;
       const entityType = req.query.entityType as string | undefined;
       
@@ -3826,7 +4011,6 @@ export async function registerRoutes(
       params.push(limit);
       
       const result = await pool.query(query, params);
-      await pool.end();
       res.json(result.rows);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3835,13 +4019,13 @@ export async function registerRoutes(
 
   app.get("/api/admin/lead-history/:leadId", requireAgentOrAdmin, async (req, res) => {
     try {
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const result = await pool.query(
         'SELECT lsh.*, u.email as changed_by_email FROM lead_status_history lsh LEFT JOIN users u ON lsh.changed_by = u.id WHERE lsh.lead_id = $1 ORDER BY lsh.changed_at DESC',
         [req.params.leadId]
       );
-      await pool.end();
       res.json(result.rows);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3862,7 +4046,7 @@ export async function registerRoutes(
       const today = new Date().toISOString().split('T')[0];
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
-      const [bloqueos, leads, leadsHoy, leadsEsteMes, topDestinos, stockBajo] = await Promise.all([
+      const [bloqueos, leads, leadsHoy, leadsEsteMes, topDestinos, stockBajo, reservasStats] = await Promise.all([
         pool.query(`SELECT COUNT(*) as total,
           SUM(habitaciones_disponibles) as disponibles,
           SUM(CASE WHEN habitaciones_disponibles = 0 THEN 1 ELSE 0 END) as agotados,
@@ -3877,8 +4061,15 @@ export async function registerRoutes(
         pool.query(`SELECT hotel, destino, habitaciones_disponibles, fecha_inicio as check_in
           FROM bloqueos WHERE estado = 'Activo' AND habitaciones_disponibles <= 3 AND fecha_inicio >= $1
           ORDER BY habitaciones_disponibles ASC, fecha_inicio ASC LIMIT 10`, [today]),
+        pool.query(`SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN status IN ('hold','pending_payment') THEN 1 ELSE 0 END) as pendientes,
+          SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmadas,
+          SUM(CASE WHEN status = 'confirmed' AND created_at >= $1 THEN CAST(precio_venta AS numeric) ELSE 0 END) as monto_confirmado_mes
+          FROM reservas`, [monthStart]),
       ]);
 
+      const r = reservasStats.rows[0];
       res.json({
         inventario: {
           totalBloqueos: parseInt(bloqueos.rows[0].total),
@@ -3891,7 +4082,12 @@ export async function registerRoutes(
           hoy: parseInt(leadsHoy.rows[0].total),
           esteMes: parseInt(leadsEsteMes.rows[0].total),
         },
-        reservas: { total: 0, pendientes: 0, confirmadas: 0, montoConfirmadoMes: 0 },
+        reservas: {
+          total: parseInt(r.total),
+          pendientes: parseInt(r.pendientes),
+          confirmadas: parseInt(r.confirmadas),
+          montoConfirmadoMes: parseFloat(r.monto_confirmado_mes || 0),
+        },
         topDestinos: topDestinos.rows,
         stockBajo: stockBajo.rows,
       });
@@ -3900,6 +4096,586 @@ export async function registerRoutes(
     }
   });
 
+
+  // ============================================
+  // NEWSLETTER SUBSCRIBE
+  // ============================================
+
+  const newsletterSubscribeSchema = z.object({
+    email:     z.string().email(),
+    nombre:    z.string().min(1).max(100).optional(),
+    intereses: z.array(z.string()).optional(),
+  });
+
+  app.post("/api/newsletter/subscribe", async (req, res) => {
+    try {
+      const parsed = newsletterSubscribeSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const { email, nombre, intereses } = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { newsletterSubscribers } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      // Check duplicate
+      const existing = await db
+        .select()
+        .from(newsletterSubscribers)
+        .where(eq(newsletterSubscribers.email, email.trim().toLowerCase()))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return res.status(200).json({ ok: true, message: "Ya estás suscrito/a a nuestro newsletter." });
+      }
+
+      await db.insert(newsletterSubscribers).values({
+        brandId,
+        email:     email.trim().toLowerCase(),
+        nombre:    nombre ? sanitizeInput(nombre) : null,
+        intereses: intereses || [],
+        activo:    true,
+      });
+
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(
+        brandCode,
+        `📧 NUEVO SUSCRIPTOR\n📬 ${email}${nombre ? `\n👤 ${nombre}` : ""}${intereses?.length ? `\n🏷️ ${intereses.join(", ")}` : ""}`
+      );
+
+      return res.status(201).json({ ok: true, message: "¡Suscripción exitosa! Recibirás nuestras mejores ofertas cada semana." });
+    } catch (err: any) {
+      console.error("[newsletter] subscribe error:", err.message);
+      return res.status(500).json({ error: "Error al procesar suscripción" });
+    }
+  });
+
+  // Newsletter stats for admin dashboard
+  app.get("/api/admin/newsletter/stats", async (req, res) => {
+    try {
+      const db = getDb();
+      const { newsletterSubscribers, brands: brandsTable } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      const allBrands = await db.select().from(brandsTable).where(eq(brandsTable.active, true));
+      const stats: Record<string, number> = {};
+
+      for (const brand of allBrands) {
+        const subs = await db
+          .select()
+          .from(newsletterSubscribers)
+          .where(and(eq(newsletterSubscribers.brandId, brand.id), eq(newsletterSubscribers.activo, true)));
+        stats[brand.code] = subs.length;
+      }
+
+      const total = Object.values(stats).reduce((a, b) => a + b, 0);
+      return res.json({ total, byBrand: stats });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // LEADS — SEGURO DE VIAJE
+  // ============================================
+
+  const seguroSchema = z.object({
+    nombre:      z.string().min(2).max(120),
+    email:       z.string().email(),
+    telefono:    z.string().min(8).max(20),
+    destino:     z.string().min(2).max(120),
+    fechaViaje:  z.string().min(3).max(60),
+    viajeros:    z.coerce.number().int().min(1).max(50),
+  });
+
+  app.post("/api/leads/seguro", async (req, res) => {
+    try {
+      const parsed = seguroSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.errors });
+
+      const d = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { leads: leadsTable } = await import("@shared/schema");
+      const [lead] = await db.insert(leadsTable).values({
+        brandId,
+        name:        sanitizeInput(d.nombre),
+        email:       d.email.trim().toLowerCase(),
+        phone:       sanitizeInput(d.telefono),
+        destination: sanitizeInput(d.destino),
+        travelDates: sanitizeInput(d.fechaViaje),
+        message:     `SEGURO DE VIAJE | ${d.viajeros} viajero(s)`,
+        source:      "formulario-seguros",
+        status:      "new",
+      }).returning();
+
+      const msg = `🛡️ COTIZACIÓN SEGURO\n━━━━━━━━━━━━━\n👤 ${d.nombre}\n📱 ${d.telefono}\n📧 ${d.email}\n🌍 ${d.destino}\n📅 ${d.fechaViaje}\n👥 ${d.viajeros} viajero(s)`;
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(brandCode, msg);
+
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (err: any) {
+      console.error("[seguro] error:", err.message);
+      return res.status(500).json({ error: "Error al registrar solicitud de seguro" });
+    }
+  });
+
+  // ============================================
+  // ADMIN — REPORTE DE COMISIONES
+  // ============================================
+
+  app.get("/api/admin/comisiones", async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const mes = (req.query.mes as string) || new Date().toISOString().slice(0, 7);
+      const [year, month] = mes.split("-").map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+
+      const { rows } = await pool.query(`
+        SELECT
+          r.id,
+          r.guest_name AS cliente,
+          r.hotel      AS destino,
+          r.check_in   AS fecha_viaje,
+          r.precio_venta::numeric             AS precio_venta,
+          (r.tarifa_publica_total::numeric * 0.85) AS costo_neto,
+          (r.precio_venta::numeric - r.tarifa_publica_total::numeric * 0.85) AS comision,
+          CASE WHEN r.precio_venta::numeric > 0
+            THEN ROUND(((r.precio_venta::numeric - r.tarifa_publica_total::numeric * 0.85) / r.precio_venta::numeric) * 100, 2)
+            ELSE 0
+          END AS porcentaje_comision,
+          r.status,
+          b.code AS brand_code
+        FROM reservas r
+        LEFT JOIN brands b ON b.id = r.brand_id
+        WHERE r.status = 'confirmed'
+          AND r.confirmed_at >= $1
+          AND r.confirmed_at <= $2
+        ORDER BY r.confirmed_at DESC
+      `, [startDate, endDate]);
+
+      const totalVendido  = rows.reduce((s: number, r: any) => s + parseFloat(r.precio_venta || 0), 0);
+      const totalComision = rows.reduce((s: number, r: any) => s + parseFloat(r.comision || 0), 0);
+      const margenPromedio = totalVendido > 0 ? (totalComision / totalVendido) * 100 : 0;
+
+      return res.json({
+        mes,
+        reservas: rows,
+        totales: {
+          totalVendido:    Math.round(totalVendido),
+          totalComision:   Math.round(totalComision),
+          margenPromedio:  Math.round(margenPromedio * 100) / 100,
+          cantidadReservas: rows.length,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // ADMIN — PIPELINE DE VENTAS
+  // ============================================
+
+  app.get("/api/admin/pipeline", async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const [leadsRows, holdsRows, ganados] = await Promise.all([
+        pool.query(`
+          SELECT id, name AS nombre, destination AS destino, status,
+                 created_at,
+                 EXTRACT(EPOCH FROM (NOW() - created_at))/86400 AS dias_en_estado
+          FROM leads
+          ORDER BY created_at DESC
+          LIMIT 500
+        `),
+        pool.query(`
+          SELECT r.id, r.guest_name AS nombre, r.hotel AS destino, r.status,
+                 r.precio_venta::numeric AS presupuesto, r.created_at,
+                 EXTRACT(EPOCH FROM (NOW() - r.created_at))/86400 AS dias_en_estado
+          FROM reservas r
+          WHERE r.status IN ('hold','pending_payment')
+          ORDER BY r.created_at DESC
+          LIMIT 200
+        `),
+        pool.query(`
+          SELECT r.id, r.guest_name AS nombre, r.hotel AS destino, r.status,
+                 r.precio_venta::numeric AS presupuesto, r.confirmed_at AS created_at,
+                 EXTRACT(EPOCH FROM (NOW() - COALESCE(r.confirmed_at, r.created_at)))/86400 AS dias_en_estado
+          FROM reservas r
+          WHERE r.status = 'confirmed'
+          ORDER BY r.confirmed_at DESC
+          LIMIT 200
+        `),
+      ]);
+
+      const leads = leadsRows.rows;
+
+      const pipeline = {
+        nuevo: {
+          items: leads.filter((l: any) => l.status === 'new'),
+          label: "Nuevo",
+          color: "blue",
+        },
+        contactado: {
+          items: leads.filter((l: any) => ['contacted','qualified','following'].includes(l.status)),
+          label: "Contactado",
+          color: "purple",
+        },
+        cotizado: {
+          items: leads.filter((l: any) => ['hot','cotizado','proposal'].includes(l.status)),
+          label: "Cotizado",
+          color: "amber",
+        },
+        hold_activo: {
+          items: holdsRows.rows,
+          label: "Hold Activo",
+          color: "orange",
+        },
+        ganado: {
+          items: ganados.rows,
+          label: "Ganado",
+          color: "green",
+        },
+        perdido: {
+          items: leads.filter((l: any) => ['lost','cold','closed','disqualified'].includes(l.status)),
+          label: "Perdido",
+          color: "red",
+        },
+      };
+
+      const result: Record<string, any> = {};
+      for (const [key, col] of Object.entries(pipeline)) {
+        const presupuestoTotal = (col.items as any[]).reduce((s: number, i: any) => {
+          return s + (parseFloat(i.presupuesto || 0));
+        }, 0);
+        result[key] = {
+          label:            col.label,
+          color:            col.color,
+          cantidad:         col.items.length,
+          presupuestoTotal: Math.round(presupuestoTotal),
+          items:            col.items.slice(0, 50),
+        };
+      }
+
+      return res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // ADMIN — CALENDARIO DE CHECK-INS
+  // ============================================
+
+  app.get("/api/admin/checkins", async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const mes = (req.query.mes as string) || new Date().toISOString().slice(0, 7);
+      const [year, month] = mes.split("-").map(Number);
+      const startDate = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10);
+
+      const { rows } = await pool.query(`
+        SELECT
+          DATE(check_in::date) AS fecha,
+          hotel,
+          guest_name,
+          habitaciones_reservadas,
+          precio_venta::numeric AS monto,
+          status,
+          confirmation_code
+        FROM reservas
+        WHERE status = 'confirmed'
+          AND check_in::date >= $1
+          AND check_in::date <= $2
+        ORDER BY check_in ASC
+      `, [startDate, endDate]);
+
+      // Group by date
+      const byDate: Record<string, any[]> = {};
+      for (const row of rows) {
+        const d = String(row.fecha).slice(0, 10);
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(row);
+      }
+
+      return res.json({ mes, checkins: byDate, total: rows.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fase 6: Lead Campaigns ───────────────────────────────────────────────
+  app.get("/api/admin/lead-campaigns", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const brandId = req.brand?.id;
+      if (!brandId) return res.status(400).json({ error: "Brand not found" });
+      const list = await leadCampaignService.getLeadCampaigns(brandId);
+      return res.json(list);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/lead-campaigns", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const brandId = req.brand?.id;
+      if (!brandId) return res.status(400).json({ error: "Brand not found" });
+      const { name, channel, subject, body, leadStatuses } = req.body;
+      if (!name || !body) return res.status(400).json({ error: "name y body requeridos" });
+      const campaign = await leadCampaignService.createLeadCampaign({
+        brandId,
+        name,
+        channel: channel || "email",
+        subject,
+        body,
+        leadStatuses: leadStatuses || [],
+        createdBy: req.session?.userId,
+      });
+      return res.status(201).json(campaign);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/lead-campaigns/:id/send", requireAdminRole, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const result = await leadCampaignService.executeLeadCampaign(req.params.id);
+      return res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/lead-campaigns/:id/stats", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const stats = await leadCampaignService.getCampaignStats(req.params.id);
+      return res.json(stats);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/lead-campaigns/generate-copy", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { generateCampaignCopy } = await import("./services/ai/campaign-copy.service");
+      const { channel, topic, audienceSegment } = req.body;
+      if (!topic) return res.status(400).json({ error: "topic requerido" });
+      const brand = req.brand;
+      const copy = await generateCampaignCopy({
+        brandCode:       brand?.code || "chroma",
+        brandName:       brand?.name || "Chroma Travel",
+        channel:         channel || "email",
+        topic,
+        audienceSegment: audienceSegment || "leads interesados en viajes",
+      });
+      if (!copy) return res.status(500).json({ error: "No se pudo generar el copy" });
+      return res.json(copy);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fase 6: Automations ───────────────────────────────────────────────────
+  app.post("/api/admin/automations/trigger", requireAdminRole, async (req, res) => {
+    try {
+      const { automationService } = await import("./services/crm/automation.service");
+      const brandId = req.brand?.id;
+      if (!brandId) return res.status(400).json({ error: "Brand not found" });
+      const results = await automationService.runAllAutomations(brandId);
+      return res.json(results);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/automations/status", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const flows = [
+        { key: "birthdays",  name: "Cumpleaños",       description: "Mensaje + 100 pts a clientes con cumpleaños hoy" },
+        { key: "coldLeads",  name: "Leads fríos",       description: "Follow-up a leads sin contacto > 3 días" },
+        { key: "winback",    name: "Recuperación",      description: "Reactivar clientes inactivos > 90 días" },
+        { key: "reminders",  name: "Recordatorios viaje", description: "Recuerda a clientes con check-in en 7 días" },
+        { key: "reviews",    name: "Reseñas",           description: "Pide reseña 3 días después del checkout" },
+      ];
+
+      return res.json({ flows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── IA: Smart Quoter ──────────────────────────────────────────────────────
+  app.post("/api/ai/smart-quote", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const { destino, presupuesto, checkIn, checkOut, personas, brandCode } = req.body as {
+        destino?: string;
+        presupuesto?: string;
+        checkIn?: string;
+        checkOut?: string;
+        personas?: number;
+        brandCode?: string;
+      };
+
+      const { generateSmartQuote } = await import("./services/ai/smart-quoter.service");
+      const brand = req.brand;
+
+      const { rows } = await pool.query(`
+        SELECT id, hotel, tipo_habitacion, fecha_inicio, fecha_fin,
+               tarifa_doble::numeric AS tarifa_doble,
+               habitaciones_disponibles
+        FROM bloqueos
+        WHERE estado = 'Activo'
+          AND habitaciones_disponibles > 0
+          AND fecha_inicio >= CURRENT_DATE
+          AND (marca IS NULL OR marca = $1)
+        ORDER BY tarifa_doble ASC
+        LIMIT 60
+      `, [brandCode || brand?.code || "chroma"]);
+
+      const blocks = rows.map((r: any) => ({
+        id: Number(r.id),
+        hotel: r.hotel,
+        tipo_habitacion: r.tipo_habitacion,
+        fecha_inicio: r.fecha_inicio,
+        fecha_fin: r.fecha_fin,
+        tarifa_doble: parseFloat(r.tarifa_doble),
+        habitaciones_disponibles: r.habitaciones_disponibles,
+      }));
+
+      const recommendations = await generateSmartQuote(
+        brand?.name || "Chroma Travel",
+        { destino, presupuesto, checkIn, checkOut, personas },
+        blocks
+      );
+
+      return res.json({ recommendations });
+    } catch (err: any) {
+      console.error("[smart-quote]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── IA: Blog Generator ───────────────────────────────────────────────────
+  app.post("/api/admin/blog/generate", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { topic, keywords, brandCode, whatsappNumber, domain, targetLength } = req.body as {
+        topic: string;
+        keywords: string[];
+        brandCode?: string;
+        whatsappNumber?: string;
+        domain?: string;
+        targetLength?: number;
+      };
+
+      if (!topic) return res.status(400).json({ error: "topic requerido" });
+
+      const { generateBlogPost } = await import("./services/ai/blog-generator.service");
+      const brand = req.brand;
+      const code = brandCode || brand?.code || "chroma";
+      const brandName = brand?.name || (code === "fenix" ? "Fénix Traveler" : "Chroma Travel");
+
+      const post = await generateBlogPost({
+        topic,
+        keywords: keywords || [],
+        brandName,
+        brandCode: code,
+        whatsappNumber,
+        domain,
+        targetLength,
+      });
+
+      if (!post) return res.status(500).json({ error: "No se pudo generar el post" });
+      return res.json(post);
+    } catch (err: any) {
+      console.error("[blog/generate]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/blog/publish", requireAdminRole, async (req, res) => {
+    try {
+      const { slug, title, content, metaDescription, tags, brandCode } = req.body as {
+        slug: string;
+        title: string;
+        content: string;
+        metaDescription?: string;
+        tags?: string[];
+        brandCode?: string;
+      };
+
+      if (!slug || !content) return res.status(400).json({ error: "slug y content requeridos" });
+
+      const path = await import("path");
+      const fs = await import("fs/promises");
+      const postsDir = path.join(process.cwd(), "posts");
+
+      await fs.mkdir(postsDir, { recursive: true });
+
+      const brand = req.brand;
+      const code = brandCode || brand?.code || "chroma";
+      const today = new Date().toISOString().slice(0, 10);
+
+      const frontmatter = `---
+title: "${title.replace(/"/g, '\\"')}"
+date: "${today}"
+brand: "${code}"
+tags: [${(tags || []).map((t) => `"${t}"`).join(", ")}]
+metaDescription: "${(metaDescription || "").replace(/"/g, '\\"')}"
+---
+
+`;
+      const filePath = path.join(postsDir, `${slug}.md`);
+      await fs.writeFile(filePath, frontmatter + content, "utf-8");
+
+      return res.json({ ok: true, file: `posts/${slug}.md` });
+    } catch (err: any) {
+      console.error("[blog/publish]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── IA: Hot Leads ────────────────────────────────────────────────────────
+  app.get("/api/admin/leads/hot", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const db = getDb();
+      const { leads: leadsTable } = await import("@shared/schema");
+      const { gte, desc: descOp } = await import("drizzle-orm");
+
+      const hotLeads = await db
+        .select()
+        .from(leadsTable)
+        .where(gte(leadsTable.score, 70))
+        .orderBy(descOp(leadsTable.score))
+        .limit(20);
+
+      return res.json(hotLeads);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   return httpServer;
 }

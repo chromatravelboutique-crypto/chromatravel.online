@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowLeft, CreditCard, Lock, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, CreditCard, Lock, Check, Loader2, ExternalLink } from "lucide-react";
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import { BookingSteps } from "@/components/booking-steps";
@@ -58,14 +58,6 @@ const guestFormSchema = z.object({
 
 type GuestFormValues = z.infer<typeof guestFormSchema>;
 
-const paymentFormSchema = z.object({
-  cardNumber: z.string().min(16, "Número de tarjeta inválido"),
-  cardName: z.string().min(2, "Nombre del titular requerido"),
-  expiry: z.string().regex(/^\d{2}\/\d{2}$/, "Formato inválido (MM/YY)"),
-  cvv: z.string().min(3, "CVV inválido").max(4),
-});
-
-type PaymentFormValues = z.infer<typeof paymentFormSchema>;
 
 type RoomWithRates = Room & { rates: Rate[] };
 type HotelWithRooms = Hotel & { rooms: RoomWithRates[] };
@@ -153,45 +145,39 @@ export default function Booking() {
     },
   });
 
-  const paymentForm = useForm<PaymentFormValues>({
-    resolver: zodResolver(paymentFormSchema),
-    defaultValues: {
-      cardNumber: "",
-      cardName: "",
-      expiry: "",
-      cvv: "",
-    },
-  });
+  const [clipPaymentUrl, setClipPaymentUrl] = useState<string | null>(null);
 
   const onGuestSubmit = (data: GuestFormValues) => {
     setGuestData(data);
     setCurrentStep(3);
   };
 
-  const onPaymentSubmit = async (data: PaymentFormValues) => {
+  const onRequestClipPayment = async () => {
     if (!guestData || !rateData || !hotelId || !rateId) return;
-    
     setIsProcessing(true);
-    
-    const totalPrice = (Number(rateData.price) * nights).toFixed(2);
-    
-    createBookingMutation.mutate({
-      hotelId: hotelId,
-      roomId: rateData.roomId,
-      rateId: rateId,
-      checkIn: checkInStr,
-      checkOut: checkOutStr,
-      guests: guests,
-      guestFirstName: guestData.firstName,
-      guestLastName: guestData.lastName,
-      guestEmail: guestData.email,
-      guestPhone: guestData.phone,
-      specialRequests: guestData.specialRequests || undefined,
-      totalPrice: totalPrice,
-      currency: rateData.currency || "USD",
-      status: "confirmed",
-      paymentStatus: "paid",
-    });
+    try {
+      const totalPrice = (Number(rateData.price) * nights).toFixed(2);
+      const response = await apiRequest("POST", "/api/payments/clip/session", {
+        leadId: rateId,
+        totalAmount: Number(totalPrice),
+        depositPercent: 100,
+        hotel: hotelData?.name || "",
+        checkIn: checkInStr,
+        checkOut: checkOutStr,
+        customerEmail: guestData.email,
+        customerName: `${guestData.firstName} ${guestData.lastName}`,
+      });
+      const result = await response.json();
+      if (result.paymentUrl) {
+        setClipPaymentUrl(result.paymentUrl);
+      } else {
+        throw new Error("No se pudo generar el link de pago");
+      }
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const isLoading = hotelLoading || rateLoading;
@@ -587,128 +573,73 @@ export default function Booking() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 font-display">
                       <Lock className="h-5 w-5" />
-                      Pago seguro
+                      Confirmar y pagar
                     </CardTitle>
                     <CardDescription>
-                      Tu información está protegida con encriptación SSL
+                      Pago seguro con tarjeta vía Clip
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <Form {...paymentForm}>
-                      <form onSubmit={paymentForm.handleSubmit(onPaymentSubmit)} className="space-y-6">
-                        <FormField
-                          control={paymentForm.control}
-                          name="cardNumber"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Número de tarjeta</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Input
-                                    placeholder="1234 5678 9012 3456"
-                                    {...field}
-                                    data-testid="input-card-number"
-                                  />
-                                  <CreditCard className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                  <CardContent className="space-y-6">
+                    <div className="rounded-lg bg-muted p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Total a pagar</span>
+                        <span className="font-semibold">
+                          ${totalPrice.toLocaleString()} {rate.currency}
+                        </span>
+                      </div>
+                    </div>
 
-                        <FormField
-                          control={paymentForm.control}
-                          name="cardName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Nombre del titular</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="Como aparece en la tarjeta"
-                                  {...field}
-                                  data-testid="input-card-name"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <FormField
-                            control={paymentForm.control}
-                            name="expiry"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Fecha de expiración</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="MM/YY" {...field} data-testid="input-card-expiry" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={paymentForm.control}
-                            name="cvv"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>CVV</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="password"
-                                    placeholder="123"
-                                    maxLength={4}
-                                    {...field}
-                                    data-testid="input-card-cvv"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                    {clipPaymentUrl ? (
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-4 text-center">
+                          <Check className="mx-auto mb-2 h-6 w-6 text-green-600" />
+                          <p className="text-sm font-medium">Link de pago generado</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Haz clic para pagar de forma segura con Clip
+                          </p>
                         </div>
-
-                        <Separator />
-
-                        <div className="rounded-lg bg-muted p-4">
-                          <div className="flex justify-between text-sm">
-                            <span>Total a pagar</span>
-                            <span className="font-semibold">
-                              ${totalPrice.toLocaleString()} {rate.currency}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setCurrentStep(2)}
-                            disabled={isProcessing}
-                            data-testid="button-back-step3"
-                          >
-                            Atrás
+                        <a href={clipPaymentUrl} target="_blank" rel="noopener noreferrer" className="block">
+                          <Button className="w-full gap-2 bg-green-600 hover:bg-green-700" data-testid="button-open-clip">
+                            <CreditCard className="h-4 w-4" />
+                            Pagar con tarjeta
+                            <ExternalLink className="h-3 w-3" />
                           </Button>
-                          <Button 
-                            type="submit" 
-                            className="flex-1" 
-                            disabled={isProcessing}
-                            data-testid="button-confirm-payment"
-                          >
-                            {isProcessing ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Procesando...
-                              </>
-                            ) : (
-                              "Confirmar y pagar"
-                            )}
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
+                        </a>
+                        <Button variant="outline" className="w-full" onClick={() => setCurrentStep(2)}>
+                          Atrás
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCurrentStep(2)}
+                          disabled={isProcessing}
+                          data-testid="button-back-step3"
+                        >
+                          Atrás
+                        </Button>
+                        <Button
+                          className="flex-1"
+                          disabled={isProcessing}
+                          onClick={onRequestClipPayment}
+                          data-testid="button-confirm-payment"
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generando link...
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="mr-2 h-4 w-4" />
+                              Pagar ${totalPrice.toLocaleString()} {rate.currency}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -716,20 +647,12 @@ export default function Booking() {
 
             <aside className="w-full lg:w-96">
               <BookingSummary
-                hotelName={hotel.name}
-                hotelCity={hotel.city}
-                hotelCountry={hotel.country}
-                hotelImage={hotel.thumbnail || hotelImage}
-                roomName={room.name}
-                rateName={rate.name}
+                hotel={{ name: hotel.name, city: hotel.city, country: hotel.country, thumbnail: hotel.thumbnail ?? undefined }}
+                room={{ name: room.name }}
+                rate={{ name: rate.name, price: rate.price, currency: rate.currency ?? undefined, mealPlan: rate.mealPlan ?? undefined }}
                 checkIn={checkIn}
                 checkOut={checkOut}
-                nights={nights}
                 guests={guests}
-                pricePerNight={Number(rate.price)}
-                totalPrice={totalPrice}
-                currency={rate.currency || "USD"}
-                mealPlan={rate.mealPlan || undefined}
               />
             </aside>
           </div>

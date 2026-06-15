@@ -35,10 +35,28 @@ function useParallax() {
 export function HeroSection() {
   const parallaxRef = useParallax();
   const textRef = useRef<HTMLDivElement>(null);
-  
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Lazy-play video only when it enters the viewport
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          video.play().catch(() => {});
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (!textRef.current) return;
-    
+
     const elements = textRef.current.querySelectorAll(".animate-in");
   }, []);
 
@@ -49,10 +67,11 @@ export function HeroSection() {
     >
       <div className="absolute inset-0">
         <video
-          autoPlay
+          ref={videoRef}
           muted
           loop
           playsInline
+          preload="none"
           poster={heroImage}
           className="h-full w-full object-cover scale-105"
           data-testid="video-hero-background"

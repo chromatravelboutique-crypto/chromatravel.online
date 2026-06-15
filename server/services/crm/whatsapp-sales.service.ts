@@ -3,10 +3,14 @@ import {
   whatsappConversations,
   whatsappMessages,
   leads,
+  brands,
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { aiService } from "../ai";
 import type { AIMessage } from "../ai";
+import { getBrandPersonality, generateWhatsAppResponse, type ConversationTurn } from "../ai/whatsapp-ai.service";
+import { aiScoreLead } from "./lead-scoring.service";
+import { sendBrandAdminAlert } from "../notification.service";
 
 function getDatabase() {
   const db = getDb();
@@ -34,14 +38,21 @@ interface ConversationContext {
   history: { role: string; content: string }[];
 }
 
-const SALES_SYSTEM_PROMPT = `Eres un asistente de ventas de una agencia de viajes premium. Tu objetivo es:
+function buildSalesSystemPrompt(brandCode: string): string {
+  const p = getBrandPersonality(brandCode);
+  return `Eres un asesor de ventas de ${p.nombre}. Tono: ${p.tono}.
+Tu objetivo es:
 1. Identificar la intención del cliente (precio, disponibilidad, reservar, información, queja)
 2. Extraer información relevante (destino, fechas, número de personas, presupuesto)
-3. Generar respuestas útiles y amigables en español
+3. Generar respuestas amigables y alineadas con la personalidad de la marca
 4. Crear oportunidades de venta
 
-Responde SIEMPRE en español mexicano profesional pero amigable.
-Si detectas una oportunidad de venta clara, sugiere crear un lead.
+Palabras clave a usar: ${p.keywordsUsar.join(", ")}.
+Palabras a evitar: ${p.keywordsEvitar.join(", ")}.
+Saludo de primer contacto: "${p.saludo}"
+Cierre de mensajes: "${p.cierre}"
+
+Responde SIEMPRE en español mexicano. Si detectas una oportunidad de venta clara, sugiere crear un lead.
 Si el cliente quiere reservar, escala a un agente humano.
 
 IMPORTANTE: Responde en formato JSON con esta estructura:
@@ -55,17 +66,35 @@ IMPORTANTE: Responde en formato JSON con esta estructura:
   "suggestedAction": "create_lead|generate_quote|escalate_agent|provide_info|respond",
   "suggestedResponse": "Tu respuesta amigable aquí"
 }`;
+}
+
+// Brand code cache (avoids repeated DB lookups per message)
+const brandCodeCache = new Map<string, string>();
 
 class WhatsAppSalesService {
+  private async getBrandCode(brandId: string): Promise<string> {
+    if (brandCodeCache.has(brandId)) return brandCodeCache.get(brandId)!;
+    try {
+      const db = getDatabase();
+      const [brand] = await db.select({ code: brands.code }).from(brands).where(eq(brands.id, brandId)).limit(1);
+      const code = brand?.code || "chroma";
+      brandCodeCache.set(brandId, code);
+      return code;
+    } catch {
+      return "chroma";
+    }
+  }
+
   async handleIncomingMessage(
     phoneNumber: string,
     message: string,
     brandId: string
   ) {
     const db = getDatabase();
-    
+    const brandCode = await this.getBrandCode(brandId);
+
     let conversation = await this.getOrCreateConversation(phoneNumber, brandId);
-    
+
     await db.insert(whatsappMessages).values({
       conversationId: conversation.id,
       direction: "inbound",
@@ -77,13 +106,47 @@ class WhatsAppSalesService {
     const context = (conversation.context as ConversationContext) || { history: [] };
     context.history = context.history || [];
     context.history.push({ role: "user", content: message });
-    
+
     if (context.history.length > 10) {
       context.history = context.history.slice(-10);
     }
 
-    const analysis = await this.analyzeMessage(message, context);
-    
+    // Try AI-powered response first for non-command messages
+    const isCommand = message.startsWith("/");
+    let finalResponse: string;
+    let analysis: MessageAnalysis;
+
+    if (!isCommand) {
+      // Use WhatsApp AI service for natural responses
+      const aiResponse = await generateWhatsAppResponse(
+        message,
+        {
+          destino:     context.destination,
+          fechas:      context.dates,
+          personas:    context.pax,
+          presupuesto: context.budget,
+        },
+        brandCode,
+        context.history.slice(-8).map((h) => ({
+          role: h.role as "user" | "assistant",
+          content: h.content,
+        })) as ConversationTurn[]
+      );
+
+      if (aiResponse) {
+        finalResponse = aiResponse;
+        // Still run intent analysis in background
+        analysis = await this.analyzeMessage(message, context, brandCode);
+        analysis.suggestedResponse = aiResponse;
+      } else {
+        analysis = await this.analyzeMessage(message, context, brandCode);
+        finalResponse = analysis.suggestedResponse;
+      }
+    } else {
+      analysis = await this.analyzeMessage(message, context, brandCode);
+      finalResponse = analysis.suggestedResponse;
+    }
+
     if (analysis.destination) context.destination = analysis.destination;
     if (analysis.dates) context.dates = analysis.dates;
     if (analysis.pax) context.pax = analysis.pax;
@@ -99,8 +162,10 @@ class WhatsAppSalesService {
       })
       .where(eq(whatsappConversations.id, conversation.id));
 
+    let leadId: string | undefined;
     if (analysis.suggestedAction === "create_lead" && analysis.destination) {
-      await this.createLeadFromConversation(conversation.id, brandId, phoneNumber, context);
+      const lead = await this.createLeadFromConversation(conversation.id, brandId, phoneNumber, context);
+      leadId = lead?.id;
     }
 
     if (analysis.suggestedAction === "escalate_agent") {
@@ -114,24 +179,65 @@ class WhatsAppSalesService {
       conversationId: conversation.id,
       direction: "outbound",
       messageType: "text",
-      content: analysis.suggestedResponse,
+      content: finalResponse,
       status: "sent",
       aiAnalysis: analysis,
     });
 
-    context.history.push({ role: "assistant", content: analysis.suggestedResponse });
+    context.history.push({ role: "assistant", content: finalResponse });
     await db
       .update(whatsappConversations)
       .set({ context })
       .where(eq(whatsappConversations.id, conversation.id));
 
-    console.log(`[WhatsApp Sales] Processed message from ${phoneNumber}: ${analysis.intent} (provider: ${aiService.getProviderName()})`);
-    
+    // AI lead scoring — fire and forget
+    if (leadId) {
+      this.scoreLeadAsync(leadId, brandCode, context).catch(() => {});
+    }
+
+    console.log(`[WhatsApp Sales] Processed message from ${phoneNumber}: ${analysis.intent} (brand: ${brandCode})`);
+
     return {
-      response: analysis.suggestedResponse,
+      response: finalResponse,
       analysis,
       conversationId: conversation.id,
     };
+  }
+
+  private async scoreLeadAsync(leadId: string, brandCode: string, context: ConversationContext) {
+    try {
+      const db = getDatabase();
+      const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+      if (!lead) return;
+
+      const result = await aiScoreLead(
+        {
+          name:        lead.name,
+          destination: lead.destination ?? undefined,
+          travelDates: lead.travelDates ?? undefined,
+          message:     lead.message ?? undefined,
+          source:      lead.source ?? undefined,
+          phone:       lead.phone ?? undefined,
+        },
+        context.history
+      );
+
+      if (!result) return;
+
+      await db.update(leads).set({
+        score:         result.score,
+        aiScoreReason: result.reason,
+        aiNextAction:  result.nextAction,
+      }).where(eq(leads.id, leadId));
+
+      // Notify admin of hot lead
+      if (result.score >= 70) {
+        const msg = `🔥 LEAD CALIENTE (Score: ${result.score})\n👤 ${lead.name}\n🌍 ${lead.destination || "sin destino"}\n📋 ${result.reason}\n➡️ Acción: ${result.nextAction}`;
+        void sendBrandAdminAlert(brandCode, msg);
+      }
+    } catch (err) {
+      console.error("[WhatsApp Sales] scoreLeadAsync error:", err);
+    }
   }
 
   private async getOrCreateConversation(phoneNumber: string, brandId: string) {
@@ -164,8 +270,9 @@ class WhatsAppSalesService {
   }
 
   private async analyzeMessage(
-    message: string, 
-    context: ConversationContext
+    message: string,
+    context: ConversationContext,
+    brandCode = "chroma"
   ): Promise<MessageAnalysis> {
     try {
       const contextSummary: string[] = [];
@@ -174,8 +281,8 @@ class WhatsAppSalesService {
       if (context.pax) contextSummary.push(`Personas: ${context.pax}`);
       if (context.budget) contextSummary.push(`Presupuesto: ${context.budget}`);
 
-      const systemContent = SALES_SYSTEM_PROMPT + (contextSummary.length > 0 
-        ? `\n\nContexto de la conversación:\n${contextSummary.join("\n")}` 
+      const systemContent = buildSalesSystemPrompt(brandCode) + (contextSummary.length > 0
+        ? `\n\nContexto de la conversación:\n${contextSummary.join("\n")}`
         : "");
 
       const messages: AIMessage[] = [
@@ -204,14 +311,14 @@ class WhatsAppSalesService {
         return JSON.parse(jsonMatch[0]) as MessageAnalysis;
       }
 
-      return this.getDefaultAnalysis(message);
+      return this.getDefaultAnalysis(message, brandCode);
     } catch (error) {
       console.error("[WhatsApp Sales] AI analysis error:", error);
       return this.getDefaultAnalysis(message);
     }
   }
 
-  private getDefaultAnalysis(message: string): MessageAnalysis {
+  private getDefaultAnalysis(message: string, brandCode = "chroma"): MessageAnalysis {
     const lowerMessage = message.toLowerCase();
     
     let intent: MessageAnalysis["intent"] = "general";
@@ -246,23 +353,24 @@ class WhatsAppSalesService {
       destination,
       confidence: 0.6,
       suggestedAction,
-      suggestedResponse: this.getDefaultResponse(intent, destination),
+      suggestedResponse: this.getDefaultResponse(intent, destination, brandCode),
     };
   }
 
-  private getDefaultResponse(intent: string, destination?: string): string {
+  private getDefaultResponse(intent: string, destination?: string, brandCode = "chroma"): string {
+    const p = getBrandPersonality(brandCode);
     const responses: Record<string, string> = {
-      greeting: "Bienvenido. ¿En qué destino estás interesado? Tenemos las mejores opciones en playa, ciudades y aventura.",
-      price_inquiry: destination 
-        ? `Excelente elección. ${destination} es un destino increíble. Para darte el mejor precio, ¿me podrías decir las fechas aproximadas y cuántas personas viajan?`
-        : "Con gusto te ayudo con precios. ¿Qué destino te interesa y para cuántas personas?",
+      greeting: `${p.saludo} ¿En qué destino estás interesado? ${p.cierre}`,
+      price_inquiry: destination
+        ? `Excelente elección. ${destination} es una experiencia ${brandCode === "fenix" ? "única y exclusiva" : "increíble e inclusiva"}. Para enviarte opciones personalizadas, ¿me podrías indicar las fechas y cuántas personas viajan?`
+        : "Con gusto te ayudo. ¿Qué destino te interesa y para cuántas personas?",
       availability: "Permíteme verificar la disponibilidad. ¿Podrías darme las fechas exactas que tienes en mente?",
-      booking: "Perfecto. Un asesor te contactará en breve para finalizar tu reservación. ¿Tienes alguna preferencia especial?",
+      booking: `Perfecto. Un asesor te contactará en breve. ${p.cierre}`,
       complaint: "Lamento mucho el inconveniente. Un supervisor te contactará en los próximos minutos para resolver tu situación.",
       destination_info: destination
-        ? `${destination} es un destino espectacular. ¿Te gustaría conocer nuestros paquetes especiales?`
+        ? `${destination} es un destino ${brandCode === "fenix" ? "exclusivo y premium" : "increíble y friendly"}. ¿Te gustaría conocer nuestros paquetes disponibles?`
         : "Tenemos opciones increíbles en playa y ciudad. ¿Qué tipo de viaje buscas?",
-      general: "Gracias por contactarnos. ¿En qué puedo ayudarte hoy?",
+      general: `Gracias por contactarnos. ¿En qué puedo ayudarte hoy? ${p.cierre}`,
     };
 
     return responses[intent] || responses.general;
@@ -279,7 +387,7 @@ class WhatsAppSalesService {
     const [existingLead] = await db
       .select()
       .from(leads)
-      .where(eq(leads.phone, phoneNumber));
+      .where(and(eq(leads.phone, phoneNumber), eq(leads.brandId, brandId)));
 
     if (existingLead) {
       await db
@@ -289,10 +397,11 @@ class WhatsAppSalesService {
       return existingLead;
     }
 
+    const phone = phoneNumber.replace(/\D/g, "");
     const [lead] = await db.insert(leads).values({
       brandId,
       name: `WhatsApp ${phoneNumber}`,
-      email: `wa_${phoneNumber.replace(/\D/g, "")}@placeholder.com`,
+      email: `wa_${phone}_${brandId.slice(0, 8)}@placeholder.com`,
       phone: phoneNumber,
       destination: context.destination,
       travelDates: context.dates,

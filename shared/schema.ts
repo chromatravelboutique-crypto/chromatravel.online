@@ -171,6 +171,9 @@ export const leads = pgTable("leads", {
   travelDates: text("travel_dates"),
   source: text("source").default("website"),
   status: text("status").default("new"),
+  score: integer("score"),
+  aiScoreReason: text("ai_score_reason"),
+  aiNextAction: text("ai_next_action"),
   assignedTo: varchar("assigned_to").references(() => users.id),
   customerId: varchar("customer_id").references(() => users.id),
   convertedAt: timestamp("converted_at"),
@@ -655,11 +658,11 @@ export const payments = pgTable("payments", {
   paypalOrderId: text("paypal_order_id"),
   paypalCaptureId: text("paypal_capture_id"),
   paypalPayerId: text("paypal_payer_id"),
-  
+
   amount: text("amount").notNull(),
   currency: text("currency").notNull().default("MXN"),
   status: text("status").notNull().default("pending"),
-  method: text("method").notNull().default("paypal"),
+  method: text("method").notNull().default("clip"),
   
   metadata: text("metadata"),
   errorMessage: text("error_message"),
@@ -898,6 +901,25 @@ export const reservasRelations = relations(reservas, ({ one }) => ({
   brand: one(brands, { fields: [reservas.brandId], references: [brands.id] }),
   lead:  one(leads,  { fields: [reservas.leadId],  references: [leads.id]  }),
 }));
+
+// ==================== NEWSLETTER SUBSCRIBERS ====================
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brandId:   varchar("brand_id").references(() => brands.id),
+  email:     text("email").notNull().unique(),
+  nombre:    text("nombre"),
+  intereses: text("intereses").array(),
+  activo:    boolean("activo").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const newsletterSubscribersRelations = relations(newsletterSubscribers, ({ one }) => ({
+  brand: one(brands, { fields: [newsletterSubscribers.brandId], references: [brands.id] }),
+}));
+
+export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({ id: true, createdAt: true });
+export type InsertNewsletterSubscriber = z.infer<typeof insertNewsletterSubscriberSchema>;
+export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
 
 // ==================== INSERT SCHEMAS ====================
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true });

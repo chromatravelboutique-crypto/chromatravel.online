@@ -2,6 +2,7 @@ import { db } from "./db";
 import { brands, users } from "@shared/schema";
 import { hash } from "bcrypt";
 import { eq } from "drizzle-orm";
+import crypto from "crypto";
 
 const initialBrands = [
   {
@@ -22,13 +23,13 @@ const initialBrands = [
     primaryColor: "#10b981",
     secondaryColor: "#ec4899",
     accentColor: "#f59e0b",
-    logoUrl: "/assets/kueani-logo.png",
+    logoUrl: "/assets/kuani-chroma.png",
     faviconUrl: "/favicon.ico",
     
     // Contact
-    whatsappNumber: "+525512345678",
+    whatsappNumber: "+524434044104",
     whatsappMessage: "Hola! Me interesa planear mi viaje con Chroma Travel",
-    email: "hola@chromatravel.online",
+    email: "contacto@chromatravel.online",
     phone: "+52 55 1234 5678",
     address: "Ciudad de México, México",
     facebookUrl: "https://facebook.com/chromatravelonline",
@@ -99,11 +100,11 @@ const initialBrands = [
     primaryColor: "#b45309",
     secondaryColor: "#0f172a",
     accentColor: "#eab308",
-    logoUrl: "/assets/fenix-logo.png",
+    logoUrl: "/assets/kuani-fenix.png",
     faviconUrl: "/favicon-fenix.ico",
     
     // Contact
-    whatsappNumber: "+525598765432",
+    whatsappNumber: "+524435049568",
     whatsappMessage: "Hola! Me interesa planear mi viaje premium con Fenix Traveler",
     email: "contacto@fenixtraveler.com",
     phone: "+52 55 9876 5432",
@@ -179,7 +180,16 @@ export async function seedBrands() {
         await db.insert(brands).values(brandData as any);
         console.log(`Created brand: ${brandData.code}`);
       } else {
-        console.log(`Brand ${brandData.code} already exists, skipping`);
+        await db
+          .update(brands)
+          .set({
+            whatsappNumber: brandData.whatsappNumber,
+            logoUrl: brandData.logoUrl,
+            email: brandData.email,
+            phone: brandData.phone,
+          })
+          .where(eq(brands.code, brandData.code));
+        console.log(`Updated brand ${brandData.code} contact data`);
       }
     } catch (error) {
       console.error(`Error seeding brand ${brandData.code}:`, error);
@@ -208,15 +218,17 @@ async function seedAdminUsers() {
       lastName: "Chroma",
     },
     {
-      email: "contacto@fenixtraveler.com",
+      email: "eric.cervantes@fenixtraveler.com",
       brandCode: "fenix",
       firstName: "Admin",
       lastName: "Fenix",
     }
   ];
   
-  // Use environment variable for admin password, fallback to secure default
-  const adminPassword = process.env.ADMIN_PASSWORD || "ChromaAdmin2024!";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? crypto.randomBytes(16).toString("hex");
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn("[seed-brands] ADMIN_PASSWORD not set — generated random password for admin accounts");
+  }
   const hashedPassword = await hash(adminPassword, 10);
   
   for (const adminData of adminUsers) {

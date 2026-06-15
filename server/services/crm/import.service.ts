@@ -3,6 +3,7 @@ import { users, customerProfiles, loyaltyAccounts, consents } from "@shared/sche
 import { eq, or } from "drizzle-orm";
 import { loyaltyService } from "../loyalty";
 import { parse } from "csv-parse/sync";
+import { hash } from "bcrypt";
 
 function getDatabase() {
   const db = getDb();
@@ -40,7 +41,7 @@ class ImportService {
         skip_empty_lines: true,
         trim: true,
       });
-      return records;
+      return records as PreviewRow[];
     } catch (error) {
       console.error("[Import] CSV parse error:", error);
       throw new Error("Failed to parse CSV file");
@@ -124,11 +125,12 @@ class ImportService {
         }
 
         const tempPassword = Math.random().toString(36).substring(2, 15);
+        const hashedTempPassword = await hash(tempPassword, 10);
 
         const [newUser] = await db.insert(users).values({
           brandId,
           email: email || `import_${Date.now()}_${i}@placeholder.com`,
-          password: tempPassword,
+          password: hashedTempPassword,
           firstName,
           lastName: lastName || "",
           phone: phone || undefined,

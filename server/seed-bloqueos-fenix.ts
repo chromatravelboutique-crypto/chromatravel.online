@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { parse as csvParse } from "csv-parse/sync";
-import { pool as dbPool } from "./db";
+import { getPool } from "./db";
 
 // Try multiple filenames to support both development and production environments
 const POSSIBLE_CSV_PATHS = [
@@ -56,6 +56,7 @@ interface BloqueoGroup {
   proveedor: string | null;
   habitaciones_disponibles: number;
   estado: string;
+  brand_id: string | null;
 }
 
 function parseNum(v: string): number | null {
@@ -81,6 +82,20 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
     console.warn("[Fenix Seed] CSV not found:", CSV_PATH);
     return { inserted: 0, updated: 0, errors: 0 };
   }
+
+  const dbPool = getPool();
+  if (!dbPool) {
+    console.warn("[Fenix Seed] DB not available");
+    return { inserted: 0, updated: 0, errors: 0 };
+  }
+
+  // Ensure brand_id column exists (idempotent)
+  await dbPool.query(`ALTER TABLE bloqueos ADD COLUMN IF NOT EXISTS brand_id VARCHAR`).catch(() => {});
+
+  const brandRow = await dbPool.query(
+    `SELECT id FROM brands WHERE domain = 'fenixtraveler.com' LIMIT 1`
+  ).catch(() => ({ rows: [] as any[] }));
+  const fenixBrandId: string | null = brandRow.rows[0]?.id ?? null;
 
   const raw = fs.readFileSync(CSV_PATH, "utf-8")
     .replace(/^\uFEFF/, ""); // strip BOM
@@ -130,6 +145,7 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
         proveedor: fuente,
         habitaciones_disponibles: 20,
         estado: "Activo",
+        brand_id: fenixBrandId,
       });
     }
 
@@ -177,12 +193,14 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
     `);
   } catch (_) {}
 
-  // Try to create unique index (may fail if duplicate data exists — that's OK)
+  // Índice único POR MARCA — el mismo bloqueo (hotel/fechas/habitación) puede
+  // existir para Chroma y Fénix a la vez porque comparten inventario de origen
   let hasIndex = false;
   try {
+    await dbPool.query(`DROP INDEX IF EXISTS bloqueos_upsert_key`);
     await dbPool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS bloqueos_upsert_key
-      ON bloqueos (hotel, fecha_inicio, fecha_fin, tipo_habitacion)
+      CREATE UNIQUE INDEX IF NOT EXISTS bloqueos_upsert_brand_key
+      ON bloqueos (hotel, fecha_inicio, fecha_fin, tipo_habitacion, COALESCE(brand_id, ''))
     `);
     hasIndex = true;
   } catch (_) {
@@ -201,9 +219,9 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
             hotel, proveedor, fecha_inicio, fecha_fin, tipo_habitacion,
             tarifa_sencilla, tarifa_doble, tarifa_triple, tarifa_cuadruple,
             tarifa_primer_menor, tarifa_junior,
-            habitaciones_disponibles, observaciones, estado, created_at
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
-          ON CONFLICT (hotel, fecha_inicio, fecha_fin, tipo_habitacion)
+            habitaciones_disponibles, observaciones, estado, brand_id, created_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+          ON CONFLICT (hotel, fecha_inicio, fecha_fin, tipo_habitacion, COALESCE(brand_id, ''))
           DO UPDATE SET
             proveedor = EXCLUDED.proveedor,
             tarifa_sencilla = COALESCE(EXCLUDED.tarifa_sencilla, bloqueos.tarifa_sencilla),
@@ -212,13 +230,14 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
             tarifa_cuadruple = COALESCE(EXCLUDED.tarifa_cuadruple, bloqueos.tarifa_cuadruple),
             tarifa_primer_menor = COALESCE(EXCLUDED.tarifa_primer_menor, bloqueos.tarifa_primer_menor),
             observaciones = COALESCE(EXCLUDED.observaciones, bloqueos.observaciones),
-            estado = EXCLUDED.estado
+            estado = EXCLUDED.estado,
+            brand_id = EXCLUDED.brand_id
           RETURNING (xmax = 0) AS is_insert`,
           [
             g.hotel, g.proveedor, g.fecha_inicio, g.fecha_fin, g.tipo_habitacion,
             g.tarifa_sencilla, g.tarifa_doble, g.tarifa_triple, g.tarifa_cuadruple,
             g.tarifa_primer_menor, g.tarifa_junior,
-            g.habitaciones_disponibles, g.observaciones, g.estado,
+            g.habitaciones_disponibles, g.observaciones, g.estado, g.brand_id,
           ]
         );
         if (result.rows[0]?.is_insert) inserted++;
@@ -226,8 +245,8 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
       } else {
         // Slow path: check first, then update or insert
         const existing = await dbPool.query(
-          `SELECT id FROM bloqueos WHERE hotel = $1 AND fecha_inicio = $2 AND fecha_fin = $3 AND tipo_habitacion = $4 LIMIT 1`,
-          [g.hotel, g.fecha_inicio, g.fecha_fin, g.tipo_habitacion]
+          `SELECT id FROM bloqueos WHERE hotel = $1 AND fecha_inicio = $2 AND fecha_fin = $3 AND tipo_habitacion = $4 AND COALESCE(brand_id, '') = COALESCE($5, '') LIMIT 1`,
+          [g.hotel, g.fecha_inicio, g.fecha_fin, g.tipo_habitacion, g.brand_id]
         );
         if (existing.rows.length > 0) {
           await dbPool.query(
@@ -256,13 +275,13 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
               hotel, proveedor, fecha_inicio, fecha_fin, tipo_habitacion,
               tarifa_sencilla, tarifa_doble, tarifa_triple, tarifa_cuadruple,
               tarifa_primer_menor, tarifa_junior,
-              habitaciones_disponibles, observaciones, estado, created_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())`,
+              habitaciones_disponibles, observaciones, estado, brand_id, created_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())`,
             [
               g.hotel, g.proveedor, g.fecha_inicio, g.fecha_fin, g.tipo_habitacion,
               g.tarifa_sencilla, g.tarifa_doble, g.tarifa_triple, g.tarifa_cuadruple,
               g.tarifa_primer_menor, g.tarifa_junior,
-              g.habitaciones_disponibles, g.observaciones, g.estado,
+              g.habitaciones_disponibles, g.observaciones, g.estado, g.brand_id,
             ]
           );
           inserted++;

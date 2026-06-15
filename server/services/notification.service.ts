@@ -5,16 +5,29 @@
 import { sendEmail } from '../email-service';
 
 const WA_ADMIN = process.env.ADMIN_WHATSAPP || process.env.ADMIN_PHONE || '';
-const CALLMEBOT_KEY = process.env.CALLMEBOT_API_KEY || '';
+const CALLMEBOT_KEY = process.env.CALLMEBOT_APIKEY || process.env.CALLMEBOT_API_KEY || '';
 
-async function sendCallmebot(phone: string, message: string): Promise<boolean> {
-  if (!CALLMEBOT_KEY) {
+// Brand-specific CallMeBot credentials
+const BRAND_WA: Record<string, { phone: string; key: string }> = {
+  chroma: {
+    phone: process.env.CALLMEBOT_PHONE_CHROMA || "524434044104",
+    key:   process.env.CALLMEBOT_APIKEY_CHROMA || "9243212",
+  },
+  fenix: {
+    phone: process.env.CALLMEBOT_PHONE_FENIX || "524435049568",
+    key:   process.env.CALLMEBOT_APIKEY_FENIX || "8732760",
+  },
+};
+
+async function sendCallmebot(phone: string, message: string, apiKey?: string): Promise<boolean> {
+  const key = apiKey || CALLMEBOT_KEY;
+  if (!key) {
     console.log('[whatsapp] CALLMEBOT_API_KEY not set, skipping WA notification');
     return false;
   }
   try {
     const clean = phone.replace(/\D/g, '');
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${clean}&text=${encodeURIComponent(message)}&apikey=${CALLMEBOT_KEY}`;
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${clean}&text=${encodeURIComponent(message)}&apikey=${key}`;
     const res = await fetch(url);
     return res.ok;
   } catch (err) {
@@ -22,6 +35,13 @@ async function sendCallmebot(phone: string, message: string): Promise<boolean> {
     return false;
   }
 }
+
+/** Envía WhatsApp al admin de la marca indicada (chroma|fenix). */
+export async function sendBrandAdminAlert(brandCode: string, message: string): Promise<boolean> {
+  const creds = BRAND_WA[brandCode] || BRAND_WA.chroma;
+  return sendCallmebot(creds.phone, message, creds.key);
+}
+
 
 export interface ReservaNotifParams {
   nombre: string;

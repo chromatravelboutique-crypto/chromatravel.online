@@ -12,6 +12,7 @@ import * as XLSX from "xlsx";
 import { parse as csvParse } from "csv-parse/sync";
 import crypto from "crypto";
 import { z } from "zod";
+import { requireAdmin } from "./auth-middleware";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -33,11 +34,8 @@ const upload = multer({
   },
 });
 
-// ─── Auth middleware (mirrors existing pattern) ───────────────────────────────
-function requireAdmin(req: any, res: Response, next: any) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-  if (!["admin"].includes(req.session?.userRole)) return res.status(403).json({ error: "Admin required" });
-  next();
+function sanitizeInput(str: string): string {
+  return str.replace(/[<>"'&]/g, "").trim();
 }
 
 // ─── INVENTORY LOG helper ─────────────────────────────────────────────────────
@@ -197,7 +195,7 @@ function verifyClipSignature(payload: string, signature: string): boolean {
   }
 }
 
-async function createClipCharge(opts: {
+export async function createClipCharge(opts: {
   amountCents: number;
   description: string;
   currency?: string;
@@ -237,36 +235,7 @@ async function createClipCharge(opts: {
 
 // ─── MODULE 3: Deposit logic (standalone) ────────────────────────────────────
 
-function calculateDepositRules(checkInDate: Date, totalAmount: number) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const ci = new Date(checkInDate);
-  ci.setHours(0, 0, 0, 0);
-  const days = Math.max(0, Math.round((ci.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-
-  let percent: number;
-  let label: string;
-  let policy: string;
-
-  if (days < 20) {
-    percent = 100;
-    label = "Pago total requerido";
-    policy = "Menos de 20 días al check-in — pago completo no reembolsable";
-  } else if (days <= 45) {
-    percent = 40;
-    label = "40% anticipo";
-    policy = "20-45 días al check-in — 40% anticipo no reembolsable";
-  } else {
-    percent = 20;
-    label = "20% anticipo";
-    policy = "60+ días al check-in — 20% anticipo no reembolsable";
-  }
-
-  const depositAmount = Math.ceil(totalAmount * percent / 100);
-  const balanceAmount = Math.max(0, totalAmount - depositAmount);
-
-  return { percent, label, policy, depositAmount, balanceAmount, daysUntilCheckIn: days, nonRefundable: true };
-}
+import { calculateDeposit } from "./modules/deposit.service";
 
 // ─── REGISTER ALL OTA B2C ROUTES ─────────────────────────────────────────────
 
@@ -289,7 +258,7 @@ export function registerOtaB2cRoutes(app: Express) {
     if (isNaN(checkInDate.getTime())) {
       return res.status(400).json({ error: "checkIn date inválida" });
     }
-    const result = calculateDepositRules(checkInDate, total);
+    const result = calculateDeposit(checkInDate, total);
     return res.json({ checkIn, total, currency: "MXN", ...result });
   });
 
@@ -313,7 +282,7 @@ export function registerOtaB2cRoutes(app: Express) {
         const ext = file.originalname.toLowerCase();
         if (ext.endsWith(".csv")) {
           const text = file.buffer.toString("utf-8");
-          const raw = csvParse(text, { columns: true, skip_empty_lines: true, trim: true });
+          const raw = csvParse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, any>[];
           rows = raw.map(normalizeRow);
         } else if (ext.endsWith(".xlsx") || ext.endsWith(".xls")) {
           const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: false });
@@ -481,6 +450,8 @@ export function registerOtaB2cRoutes(app: Express) {
     }
 
     const data = parsed.data;
+    const hotel = sanitizeInput(data.hotel);
+    const customerName = sanitizeInput(data.customerName);
     const depositAmount = Math.ceil(data.totalAmount * data.depositPercent / 100);
     const amountCents = Math.round(depositAmount * 100);
     const referenceId = `${data.leadId.substring(0, 8).toUpperCase()}-${Date.now()}`;
@@ -488,10 +459,10 @@ export function registerOtaB2cRoutes(app: Express) {
     try {
       const charge = await createClipCharge({
         amountCents,
-        description: `Anticipo ${data.hotel} ${data.checkIn} - ${data.checkOut}`,
+        description: `Anticipo ${hotel} ${data.checkIn} - ${data.checkOut}`,
         referenceId,
         customerEmail: data.customerEmail,
-        customerName: data.customerName,
+        customerName,
         currency: "MXN",
       });
 
@@ -569,6 +540,22 @@ export function registerOtaB2cRoutes(app: Express) {
             await pool.query(
               `UPDATE leads SET status='converted', converted_at=NOW() WHERE id=$1`, [leadId]
             );
+
+            // Confirmar la reserva asociada (reference = primeros 8 chars del lead.id)
+            try {
+              const reservaRef = String(leadId).substring(0, 8).toUpperCase();
+              const confirmResult = await pool.query(
+                `UPDATE reservas SET status='confirmed', confirmed_at=NOW()
+                 WHERE reference=$1 AND status IN ('hold','pending_payment')
+                 RETURNING id`,
+                [reservaRef]
+              );
+              if (confirmResult.rows.length > 0) {
+                console.log(`[Clip Webhook] Reserva confirmada | ref:${reservaRef} | id:${confirmResult.rows[0].id}`);
+              }
+            } catch (rsvErr: any) {
+              console.error('[Clip Webhook] reserva confirm non-fatal:', rsvErr.message);
+            }
 
             const { auditService } = await import("./services/audit.service");
             await auditService.log("payment_created", "payment", leadId, null, {
@@ -723,7 +710,7 @@ export function registerOtaB2cRoutes(app: Express) {
       </div>
     </div>
     <a href="${shareUrl}" class="cta" target="_blank" rel="noopener">Ver disponibilidad →</a>
-    <div class="brand">chromatravel.online · Tarifas Negociadas Exclusivas</div>
+    <div class="brand">${(req as any).brand?.domain ?? "chromatravel.online"} · ${(req as any).brand?.name ?? "Tarifas Negociadas Exclusivas"}</div>
   </div>
 </body>
 </html>`;

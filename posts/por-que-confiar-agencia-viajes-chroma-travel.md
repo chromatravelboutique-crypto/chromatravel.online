@@ -1,6 +1,6 @@
 ---
 title: "Por Qué Confiar en una Agencia de Viajes en 2025: La Diferencia STAVLE"
-slug: "por-que-confiar-agencia-viajes-stavle-chroma-travel"
+slug: "por-que-confiar-agencia-viajes-chroma-travel"
 excerpt: "Descubre por qué viajar con una agencia certificada STAVLE como Chroma Travel by Fénix Traveler no es un gasto extra, sino tu mejor inversión para viajar sin estrés. Conoce a Laura Ortiz, nuestra CEO con 15+ años de experiencia, y descubre Kauani Rewards, nuestro programa que premia tu confianza."
 image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1200&q=80"
 category: "Guías de Viaje"

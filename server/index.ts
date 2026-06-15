@@ -1,22 +1,27 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import compression from "compression";
-import MemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import path from "path";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { initializeAutomationJobs } from "./jobs/automation.jobs";
 import { startCleanupJob } from "./jobs/cleanup-bloqueos";
 import { startHoldExpiryJob } from "./jobs/hold-expiry";
+import { startCampaignDispatcher } from "./jobs/campaign-dispatcher";
+import { startStockAlertJob } from "./jobs/stock-alert";
+import { startDailyReportJob } from "./jobs/daily-report";
+import { startWeeklyNewsletterJob } from "./jobs/weekly-newsletter";
 import { createServer } from "http";
 import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
 import { seedBloqueos } from "./seed-bloqueos";
 import { seedBloqueosFenix } from "./seed-bloqueos-fenix";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
-const SessionStore = MemoryStore(session);
+const PgStore = connectPgSimple(session);
 
 app.disable('x-powered-by');
 
@@ -97,11 +102,45 @@ export function log(message: string, source = "express") {
   // Start hold expiry job (libera habitaciones de holds expirados cada 5 min)
   startHoldExpiryJob();
 
+  // Start campaign dispatcher (despacha campaignLogs pendientes cada 5 min)
+  startCampaignDispatcher();
+
+  // Start stock low alert (avisa al admin cuando quedan ≤2 habitaciones en un bloqueo)
+  startStockAlertJob();
+
+  // Start daily ERP report (resumen diario a las 8am via WhatsApp)
+  startDailyReportJob();
+
+  // Start weekly newsletter (lunes 9am — mejores ofertas de bloqueos)
+  startWeeklyNewsletterJob();
+
   // Domain redirect handled by Cloudflare Page Rule (apex → www)
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
-  
+
+  // ── CORS — lista blanca de orígenes permitidos ────────────────────────────
+  const ALLOWED_ORIGINS = new Set([
+    "https://chromatravel.online",
+    "https://www.chromatravel.online",
+    "https://fenixtraveler.com",
+    "https://www.fenixtraveler.com",
+  ]);
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && ALLOWED_ORIGINS.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+      res.setHeader("Vary", "Origin");
+    }
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     // Allow iframe embedding for bloqueos widget
@@ -110,6 +149,17 @@ export function log(message: string, source = "express") {
       res.setHeader('Content-Security-Policy', "frame-ancestors *");
     } else {
       res.setHeader("X-Frame-Options", "SAMEORIGIN");
+      res.setHeader(
+        "Content-Security-Policy",
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' googletagmanager.com google-analytics.com",
+          "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+          "font-src 'self' fonts.gstatic.com",
+          "img-src 'self' data: https:",
+          "connect-src 'self' api.anthropic.com",
+        ].join("; ")
+      );
     }
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     if (process.env.NODE_ENV === "production") {
@@ -142,9 +192,9 @@ export function log(message: string, source = "express") {
   }
 
   app.use(session({
-    store: new SessionStore({
-      checkPeriod: 86400000
-    }),
+    store: pool
+      ? new PgStore({ pool, tableName: "session", createTableIfMissing: true })
+      : new (require("memorystore")(session))({ checkPeriod: 86400000 }),
     secret: sessionSecret || "dev-only-secret-not-for-production",
     resave: false,
     saveUninitialized: false,

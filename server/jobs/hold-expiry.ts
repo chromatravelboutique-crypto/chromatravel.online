@@ -3,7 +3,7 @@
  * Cada 5 minutos libera reservas en estado 'hold' o 'pending_payment' que superaron su expiresAt.
  * Restaura habitaciones_disponibles en bloqueos con transacción atómica.
  */
-import { db, getPool } from "../db";
+import { getDb, getPool } from "../db";
 import { reservas } from "@shared/schema";
 import { and, inArray, lt, sql } from "drizzle-orm";
 
@@ -16,7 +16,7 @@ export async function expireHolds(): Promise<void> {
 
   try {
     // 1. Buscar holds expirados
-    const expired = await db
+    const expired = await getDb()
       .select()
       .from(reservas)
       .where(
@@ -36,29 +36,32 @@ export async function expireHolds(): Promise<void> {
       try {
         await client.query("BEGIN");
 
-        // Restaurar habitaciones — sólo si el bloqueo sigue activo
-        const restored = await client.query(
-          `UPDATE bloqueos
-           SET habitaciones_disponibles = LEAST(
-               habitaciones_disponibles + $1,
-               COALESCE(habitaciones_totales, habitaciones_disponibles + $1)
-           )
-           WHERE hotel = $2
-             AND tipo_habitacion = $3
-             AND fecha_inicio = $4
-             AND fecha_fin = $5
-           RETURNING habitaciones_disponibles`,
-          [
-            reserva.habitacionesReservadas,
-            reserva.hotel,
-            reserva.tipoHabitacion,
-            reserva.checkIn,
-            reserva.checkOut,
-          ]
-        );
+        // Restaurar habitaciones en el MISMO bloqueo que se decrementó (por id —
+        // hotel+fechas no basta porque el mismo bloqueo puede existir para ambas marcas)
+        const restored = reserva.bloqueoId
+          ? await client.query(
+              `UPDATE bloqueos
+               SET habitaciones_disponibles = habitaciones_disponibles + $1
+               WHERE id = $2
+               RETURNING habitaciones_disponibles`,
+              [reserva.habitacionesReservadas, parseInt(reserva.bloqueoId, 10)]
+            )
+          : await client.query(
+              `UPDATE bloqueos
+               SET habitaciones_disponibles = habitaciones_disponibles + $1
+               WHERE hotel = $2 AND tipo_habitacion = $3 AND fecha_inicio = $4 AND fecha_fin = $5
+               RETURNING habitaciones_disponibles`,
+              [
+                reserva.habitacionesReservadas,
+                reserva.hotel,
+                reserva.tipoHabitacion,
+                reserva.checkIn,
+                reserva.checkOut,
+              ]
+            );
 
         // Marcar como expirada
-        await db
+        await getDb()
           .update(reservas)
           .set({ status: "expired", updatedAt: new Date() })
           .where(inArray(reservas.id, [reserva.id]));

@@ -41,9 +41,12 @@ export function SEOHead({
       ? (appendBrand ? `${title} | ${brandName}` : title)
       : brand?.seoTitle || brandName;
     const metaDescription = description || brand?.seoDescription || "";
-    const canonicalUrl = canonical || window.location.href;
-    const ogImage = image || brand?.ogImage || "";
     const brandDomain = brand?.domain || "chromatravel.online";
+    const ogImage = image || brand?.ogImage || "";
+    const origin = `https://www.${brandDomain}`;
+    const canonicalUrl = canonical
+      ? (canonical.startsWith("http") ? canonical : `${origin}${canonical}`)
+      : `${origin}${window.location.pathname}`;
 
     document.title = fullTitle;
 
@@ -301,67 +304,3 @@ export function FAQSchema({ items }: FAQSchemaProps) {
   return null;
 }
 
-interface ArticleSchemaProps {
-  title: string;
-  description: string;
-  image?: string;
-  publishedTime: string;
-  modifiedTime?: string;
-  author: string;
-  url: string;
-}
-
-export function ArticleSchema({ title, description, image, publishedTime, modifiedTime, author, url }: ArticleSchemaProps) {
-  const { brand } = useBrand();
-  
-  useEffect(() => {
-    const brandName = brand?.name || "Chroma Travel";
-    const brandDomain = brand?.domain || "chromatravel.online";
-    
-    const schema = {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: title,
-      description: description,
-      image: image || `https://${brandDomain}/favicon-512.png`,
-      author: {
-        "@type": "Person",
-        name: author
-      },
-      publisher: {
-        "@type": "Organization",
-        name: brandName,
-        logo: {
-          "@type": "ImageObject",
-          url: `https://${brandDomain}/favicon-512.png`
-        }
-      },
-      datePublished: publishedTime,
-      dateModified: modifiedTime || publishedTime,
-      mainEntityOfPage: {
-        "@type": "WebPage",
-        "@id": url
-      }
-    };
-
-    let existingScript = document.querySelector('script[data-schema="article"]');
-    if (existingScript) {
-      existingScript.remove();
-    }
-
-    const script = document.createElement("script");
-    script.type = "application/ld+json";
-    script.setAttribute("data-schema", "article");
-    script.textContent = JSON.stringify(schema);
-    document.head.appendChild(script);
-
-    return () => {
-      const scriptToRemove = document.querySelector('script[data-schema="article"]');
-      if (scriptToRemove) {
-        scriptToRemove.remove();
-      }
-    };
-  }, [title, description, image, publishedTime, modifiedTime, author, url, brand]);
-
-  return null;
-}

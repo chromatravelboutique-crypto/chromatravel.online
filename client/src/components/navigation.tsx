@@ -21,6 +21,7 @@ const navLinks = [
   { href: "/blog", label: "Destinos Destacados" },
   { href: "/hotels", label: "Hoteles" },
   { href: "/bloqueos", label: "Bloqueos" },
+  { href: "/seguros", label: "Seguros de Viaje" },
   { href: "/experiences", label: "Experiencias" },
   { href: "/about", label: "Sobre Nosotros" },
   { href: "/contact", label: "Contacto" },

@@ -1,13 +1,21 @@
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import { SEOHead } from "@/components/seo-head";
+import { useBrand } from "@/lib/brand-context";
 
 export default function CookiePolicy() {
+  const { brand } = useBrand();
+  const brandName   = brand?.name   ?? "Chroma Travel";
+  const brandEmail  = brand?.email  ?? "contacto@chromatravel.online";
+  const brandDomain = brand?.domain ?? "chromatravel.online";
+  const brandWa     = brand?.whatsappNumber ?? "+524434044104";
+  const brandWaClean = brandWa.replace(/[^0-9]/g, "");
+
   return (
     <div className="flex min-h-screen flex-col">
-      <SEOHead 
-        title="Política de Cookies | Chroma Travel - Viajes LGBT+ Premium"
-        description="Información sobre el uso de cookies en Chroma Travel. Conoce qué cookies utilizamos y cómo gestionarlas para una mejor experiencia de navegación."
+      <SEOHead
+        title={`Política de Cookies | ${brandName}`}
+        description={`Información sobre el uso de cookies en ${brandName}. Conoce qué cookies utilizamos y cómo gestionarlas para una mejor experiencia de navegación.`}
       />
       <Navigation />
       <main className="flex-1 py-12 md:py-20">
@@ -25,14 +33,14 @@ export default function CookiePolicy() {
                 1. ¿Qué son las Cookies?
               </h2>
               <p className="mt-4 leading-relaxed">
-                Las cookies son pequeños archivos de texto que se almacenan en tu dispositivo 
-                (ordenador, tablet o móvil) cuando visitas un sitio web. Son ampliamente 
-                utilizadas para hacer que los sitios web funcionen de manera más eficiente, 
+                Las cookies son pequeños archivos de texto que se almacenan en tu dispositivo
+                (ordenador, tablet o móvil) cuando visitas un sitio web. Son ampliamente
+                utilizadas para hacer que los sitios web funcionen de manera más eficiente,
                 así como para proporcionar información a los propietarios del sitio.
               </p>
               <p className="mt-4 leading-relaxed">
-                En <strong>Chroma Travel</strong>, utilizamos cookies para mejorar tu experiencia 
-                de navegación, recordar tus preferencias y analizar cómo utilizas nuestro sitio 
+                En <strong>{brandName}</strong>, utilizamos cookies para mejorar tu experiencia
+                de navegación, recordar tus preferencias y analizar cómo utilizas nuestro sitio
                 para poder mejorarlo continuamente.
               </p>
             </section>
@@ -41,7 +49,7 @@ export default function CookiePolicy() {
               <h2 className="font-display text-xl font-semibold md:text-2xl">
                 2. Tipos de Cookies que Utilizamos
               </h2>
-              
+
               <div className="mt-6 space-y-6">
                 <div className="rounded-lg border bg-muted/20 p-6">
                   <h3 className="font-semibold text-lg">Cookies Esenciales</h3>
@@ -180,7 +188,7 @@ export default function CookiePolicy() {
                 3. Cookies de Terceros
               </h2>
               <p className="mt-4 leading-relaxed">
-                Además de nuestras propias cookies, utilizamos servicios de terceros que 
+                Además de nuestras propias cookies, utilizamos servicios de terceros que
                 también pueden establecer cookies en tu dispositivo:
               </p>
               <ul className="mt-4 space-y-4">
@@ -193,12 +201,12 @@ export default function CookiePolicy() {
                 <li className="rounded-lg border p-4">
                   <strong>Google AdSense</strong>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Para mostrar anuncios relevantes basados en tus intereses. Los ingresos 
+                    Para mostrar anuncios relevantes basados en tus intereses. Los ingresos
                     publicitarios nos ayudan a mantener contenido gratuito de calidad.
                   </p>
                 </li>
                 <li className="rounded-lg border p-4">
-                  <strong>PayPal / Clip</strong>
+                  <strong>Clip</strong>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Para procesar pagos de forma segura cuando realizas una reservación.
                   </p>
@@ -213,20 +221,20 @@ export default function CookiePolicy() {
               <p className="mt-4 leading-relaxed">
                 Puedes controlar y gestionar las cookies de varias formas:
               </p>
-              
+
               <div className="mt-6 space-y-4">
                 <div>
                   <h3 className="font-semibold">4.1 Banner de Cookies</h3>
                   <p className="mt-2 leading-relaxed">
-                    Al visitar nuestro sitio por primera vez, verás un banner donde puedes 
+                    Al visitar nuestro sitio por primera vez, verás un banner donde puedes
                     aceptar o rechazar las cookies no esenciales.
                   </p>
                 </div>
-                
+
                 <div>
                   <h3 className="font-semibold">4.2 Configuración del Navegador</h3>
                   <p className="mt-2 leading-relaxed">
-                    Puedes configurar tu navegador para bloquear o eliminar cookies. 
+                    Puedes configurar tu navegador para bloquear o eliminar cookies.
                     Aquí te mostramos cómo hacerlo en los navegadores más comunes:
                   </p>
                   <ul className="mt-2 list-disc pl-6 space-y-1">
@@ -251,8 +259,8 @@ export default function CookiePolicy() {
 
               <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                 <p className="text-sm">
-                  <strong>Nota:</strong> Si desactivas las cookies, algunas partes del sitio 
-                  pueden no funcionar correctamente. Por ejemplo, no podremos recordar tus 
+                  <strong>Nota:</strong> Si desactivas las cookies, algunas partes del sitio
+                  pueden no funcionar correctamente. Por ejemplo, no podremos recordar tus
                   preferencias de búsqueda o tu sesión activa.
                 </p>
               </div>
@@ -263,9 +271,9 @@ export default function CookiePolicy() {
                 5. Actualizaciones de esta Política
               </h2>
               <p className="mt-4 leading-relaxed">
-                Podemos actualizar esta Política de Cookies periódicamente para reflejar 
-                cambios en nuestras prácticas o por razones legales. Te recomendamos 
-                revisar esta página regularmente para estar informado sobre cómo usamos 
+                Podemos actualizar esta Política de Cookies periódicamente para reflejar
+                cambios en nuestras prácticas o por razones legales. Te recomendamos
+                revisar esta página regularmente para estar informado sobre cómo usamos
                 las cookies.
               </p>
             </section>
@@ -278,10 +286,10 @@ export default function CookiePolicy() {
                 Si tienes preguntas sobre nuestra Política de Cookies:
               </p>
               <div className="mt-4 rounded-lg border bg-muted/30 p-6">
-                <p><strong>Chroma Travel</strong> by Fénix Traveler</p>
-                <p className="mt-2">Email: <a href="mailto:contacto@chromatravel.online" className="text-primary hover:underline">contacto@chromatravel.online</a></p>
-                <p>WhatsApp: <a href="https://wa.me/5218000000000" className="text-primary hover:underline">+52 1 800 000 0000</a></p>
-                <p className="mt-2">Sitio web: <a href="https://chromatravel.online" className="text-primary hover:underline">chromatravel.online</a></p>
+                <p><strong>{brandName}</strong></p>
+                <p className="mt-2">Email: <a href={`mailto:${brandEmail}`} className="text-primary hover:underline">{brandEmail}</a></p>
+                <p>WhatsApp: <a href={`https://wa.me/${brandWaClean}`} className="text-primary hover:underline">{brandWa}</a></p>
+                <p className="mt-2">Sitio web: <a href={`https://${brandDomain}`} className="text-primary hover:underline">{brandDomain}</a></p>
               </div>
             </section>
           </div>

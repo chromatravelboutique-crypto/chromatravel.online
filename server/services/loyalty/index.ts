@@ -4,7 +4,7 @@
  * Manages customer loyalty accounts, points transactions, rewards, and redemptions.
  * 
  * Points Earning:
- * - 1 point per $1 USD spent on bookings
+ * - 1 punto por cada $1 MXN gastado en reservas
  * - Bonus points for referrals (500 points)
  * - Birthday bonus (100 points)
  * - Level multipliers (Gold = 1.5x, Platinum = 2x, Diamond = 3x)

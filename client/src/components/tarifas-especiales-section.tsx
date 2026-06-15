@@ -292,7 +292,8 @@ function calculateTotal(tarifa: Tarifa, rooms: RoomDistribution[], nights: numbe
     if (room.juniors > 0) total += room.juniors * (pJunior > 0 ? pJunior : baseRate * 0.7);
   }
 
-  return total;
+  // Las tarifas son por persona por noche — multiplicar por el total de noches
+  return Math.round(total * nights * 100) / 100;
 }
 
 function TravelerCounter({
@@ -379,6 +380,7 @@ function CotizadorModal({
   const [infants, setInfants] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedRef, setSubmittedRef] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -419,6 +421,7 @@ function CotizadorModal({
       setInfants(0);
       setIsSubmitted(false);
       setSubmittedRef("");
+      setPaymentUrl(null);
       setIsSubmitting(false);
       form.reset();
     }, 300);
@@ -457,10 +460,13 @@ function CotizadorModal({
       if (response.ok) {
         const result = await response.json();
         setSubmittedRef(result.reference || "");
+        setPaymentUrl(result.paymentUrl || null);
         setIsSubmitted(true);
         toast({
-          title: "Cotización enviada",
-          description: "Revisa tu correo electrónico para la confirmación.",
+          title: result.paymentUrl ? "Reserva en espera de pago" : "Cotización enviada",
+          description: result.paymentUrl
+            ? "Paga el anticipo para confirmar tu reserva. También te enviamos el link por correo."
+            : "Revisa tu correo electrónico para la confirmación.",
         });
       } else {
         const err = await response.json().catch(() => ({ message: "Error desconocido" }));
@@ -496,13 +502,23 @@ function CotizadorModal({
               </p>
             )}
             <p className="mb-4 text-sm text-muted-foreground">
-              Revisa tu correo electrónico. Un asesor te contactará para confirmar disponibilidad.
+              {paymentUrl
+                ? `Tu lugar está apartado por 30 minutos. Paga el anticipo de ${formatPrice(depositTarjeta)} con tarjeta para confirmar tu reserva al instante.`
+                : "Revisa tu correo electrónico. Un asesor te contactará para confirmar disponibilidad."}
             </p>
             <div className="flex flex-col items-center gap-3">
+              {paymentUrl && (
+                <a href={paymentUrl} target="_blank" rel="noopener noreferrer" className="w-full max-w-xs">
+                  <Button className="w-full gap-2 bg-green-600 hover:bg-green-700" data-testid="button-pay-deposit">
+                    <CheckCircle className="h-4 w-4" />
+                    Pagar anticipo ahora — {formatPrice(depositTarjeta)}
+                  </Button>
+                </a>
+              )}
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                <Button className="gap-2" data-testid="button-whatsapp-post-submit">
+                <Button className="gap-2" variant={paymentUrl ? "outline" : "default"} data-testid="button-whatsapp-post-submit">
                   <MessageCircle className="h-4 w-4" />
-                  Acelerar por WhatsApp
+                  {paymentUrl ? "Prefiero pagar por SPEI / efectivo" : "Acelerar por WhatsApp"}
                 </Button>
               </a>
               <Button variant="outline" onClick={handleClose} data-testid="button-close-cotizador">
@@ -686,6 +702,30 @@ function CotizadorModal({
                         </p>
                       </div>
                     </div>
+
+                    {/* MSI — solo si pago total y monto ≥ $7,000 */}
+                    {deposit.percent === 100 && pricing.msiOpciones.length > 0 && (
+                      <div className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 space-y-1">
+                        <p className="text-xs font-semibold text-purple-700">📅 Meses sin intereses (pago total)</p>
+                        <div className="grid grid-cols-2 gap-1">
+                          {pricing.msiOpciones.map(op => (
+                            <div key={op.plazo} className="flex items-center justify-between rounded bg-white border border-purple-100 px-2 py-1">
+                              <span className="text-xs font-medium text-purple-800">{op.plazo} MSI</span>
+                              <div className="text-right">
+                                <p className="text-xs font-bold text-purple-900">{formatPrice(op.mensualidad)}/mes</p>
+                                <p className="text-[10px] text-purple-500">Total {formatPrice(op.precioTotal)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-purple-500">El cliente no paga intereses. La sobretasa ya está incluida en el precio.</p>
+                      </div>
+                    )}
+                    {deposit.percent < 100 && pricing.precioVenta >= 7000 && (
+                      <p className="text-[10px] text-muted-foreground text-center">
+                        💡 MSI disponible solo en pago total
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between font-bold text-base">
@@ -840,7 +880,6 @@ function CotizadorModal({
 function TarifaCard({ tarifa, onConsultar }: { tarifa: Tarifa; onConsultar: (t: Tarifa) => void }) {
   const nights = getNights(tarifa.checkIn, tarifa.checkOut);
   const price = parseFloat(tarifa.priceDouble);
-  const pricePerNight = Math.round(price / nights);
 
   return (
     <Card className="group relative overflow-visible transition-shadow duration-200 hover:shadow-lg" data-testid={`card-tarifa-${tarifa.hotel.replace(/\s+/g, "-").toLowerCase()}`}>
@@ -890,11 +929,9 @@ function TarifaCard({ tarifa, onConsultar }: { tarifa: Tarifa; onConsultar: (t: 
             <div>
               <p className="text-xs text-muted-foreground">Desde</p>
               <p className="text-lg font-bold tracking-tight" data-testid="text-tarifa-price">
-                {formatPrice(tarifa.priceDouble)}
+                {formatPrice(price)}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {formatPrice(pricePerNight)} / noche
-              </p>
+              <p className="text-xs text-muted-foreground">por persona / noche</p>
             </div>
             <Button
               size="sm"

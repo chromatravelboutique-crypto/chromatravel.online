@@ -1,13 +1,19 @@
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import { SEOHead } from "@/components/seo-head";
+import { useBrand } from "@/lib/brand-context";
 
 export default function PrivacyPolicy() {
+  const { brand, isChroma } = useBrand();
+  const brandName   = brand?.name   ?? "Chroma Travel";
+  const brandEmail  = brand?.email  ?? "contacto@chromatravel.online";
+  const brandDomain = brand?.domain ?? "chromatravel.online";
+
   return (
     <div className="flex min-h-screen flex-col">
-      <SEOHead 
-        title="Política de Privacidad | Chroma Travel - Viajes LGBT+ Premium"
-        description="Conoce cómo Chroma Travel protege tu información personal. Política de privacidad transparente para viajeros LGBT+ que buscan experiencias seguras y de confianza."
+      <SEOHead
+        title={`Política de Privacidad | ${brandName}`}
+        description={`Conoce cómo ${brandName} protege tu información personal. Política de privacidad transparente para nuestros clientes.`}
       />
       <Navigation />
       <main className="flex-1 py-12 md:py-20">
@@ -25,7 +31,7 @@ export default function PrivacyPolicy() {
                 1. Introducción
               </h2>
               <p className="mt-4 leading-relaxed">
-                En <strong>Chroma Travel</strong> (chromatravel.online), operado por Fénix Traveler, 
+                En <strong>{brandName}</strong> ({brandDomain}), 
                 nos comprometemos a proteger tu privacidad y tus datos personales. Esta política 
                 describe cómo recopilamos, usamos, almacenamos y protegemos tu información cuando 
                 utilizas nuestros servicios de agencia de viajes especializada en experiencias LGBT+ premium.
@@ -54,7 +60,7 @@ export default function PrivacyPolicy() {
                 <div>
                   <h3 className="font-semibold">2.2 Información de Pago</h3>
                   <ul className="mt-2 list-disc pl-6 space-y-1">
-                    <li>Datos de tarjetas de crédito/débito (procesados de forma segura mediante PayPal y Clip)</li>
+                    <li>Datos de tarjetas de crédito/débito (procesados de forma segura mediante Clip)</li>
                     <li>Historial de transacciones</li>
                     <li>Información de facturación</li>
                   </ul>
@@ -98,7 +104,7 @@ export default function PrivacyPolicy() {
               </p>
               <ul className="mt-2 list-disc pl-6 space-y-2">
                 <li><strong>Proveedores de servicios:</strong> Hoteles, aerolíneas y operadores turísticos para confirmar reservaciones</li>
-                <li><strong>Procesadores de pago:</strong> PayPal y Clip para procesar transacciones de forma segura</li>
+                <li><strong>Procesadores de pago:</strong> Clip para procesar transacciones de forma segura</li>
                 <li><strong>Servicios de análisis:</strong> Google Analytics para mejorar nuestra plataforma</li>
                 <li><strong>Obligaciones legales:</strong> Cuando sea requerido por ley o autoridades competentes</li>
               </ul>
@@ -140,8 +146,8 @@ export default function PrivacyPolicy() {
               </ul>
               <p className="mt-4 leading-relaxed">
                 Para ejercer estos derechos, contáctanos en:{" "}
-                <a href="mailto:contacto@chromatravel.online" className="text-primary hover:underline">
-                  contacto@chromatravel.online
+                <a href={`mailto:${brandEmail}`} className="text-primary hover:underline">
+                  {brandEmail}
                 </a>
               </p>
             </section>
@@ -177,10 +183,10 @@ export default function PrivacyPolicy() {
                 Si tienes preguntas sobre esta política o sobre cómo manejamos tus datos, contáctanos:
               </p>
               <div className="mt-4 rounded-lg border bg-muted/30 p-6">
-                <p><strong>Chroma Travel</strong> by Fénix Traveler</p>
-                <p className="mt-2">Email: <a href="mailto:contacto@chromatravel.online" className="text-primary hover:underline">contacto@chromatravel.online</a></p>
-                <p>WhatsApp: <a href="https://wa.me/5218000000000" className="text-primary hover:underline">+52 1 800 000 0000</a></p>
-                <p className="mt-2">Sitio web: <a href="https://chromatravel.online" className="text-primary hover:underline">chromatravel.online</a></p>
+                <p><strong>{brandName}</strong></p>
+                <p className="mt-2">Email: <a href={`mailto:${brandEmail}`} className="text-primary hover:underline">{brandEmail}</a></p>
+                <p>WhatsApp: <a href={`https://wa.me/${(brand?.whatsappNumber ?? "+524434044104").replace(/[^0-9]/g, "")}`} className="text-primary hover:underline">{brand?.whatsappNumber ?? "+52 443 404 4104"}</a></p>
+                <p className="mt-2">Sitio web: <a href={`https://${brandDomain}`} className="text-primary hover:underline">{brandDomain}</a></p>
               </div>
             </section>
           </div>
