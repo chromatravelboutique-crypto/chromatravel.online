@@ -899,6 +899,25 @@ export const reservasRelations = relations(reservas, ({ one }) => ({
   lead:  one(leads,  { fields: [reservas.leadId],  references: [leads.id]  }),
 }));
 
+// ==================== NEWSLETTER SUBSCRIBERS ====================
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brandId:   varchar("brand_id").references(() => brands.id),
+  email:     text("email").notNull().unique(),
+  nombre:    text("nombre"),
+  intereses: text("intereses").array(),
+  activo:    boolean("activo").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const newsletterSubscribersRelations = relations(newsletterSubscribers, ({ one }) => ({
+  brand: one(brands, { fields: [newsletterSubscribers.brandId], references: [brands.id] }),
+}));
+
+export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({ id: true, createdAt: true });
+export type InsertNewsletterSubscriber = z.infer<typeof insertNewsletterSubscriberSchema>;
+export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
+
 // ==================== INSERT SCHEMAS ====================
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });

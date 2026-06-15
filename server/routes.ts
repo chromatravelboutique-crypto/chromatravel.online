@@ -30,7 +30,7 @@ import { sendEmail as sendCrmEmail, generateBirthdayEmail, generatePromoEmail, g
 import { readFeed, detectNewArticles, checkAndPublishNewContent, generateSocialButtons } from "./crm/rss-social";
 import { generateReceipt, generateProforma as generateProformaPdf, generateQRCode } from "./crm/document-generator";
 import { sendWhatsAppMessage, generateBookingWhatsAppMessage, generatePromoWhatsAppMessage, generateBirthdayWhatsAppMessage } from "./crm/whatsapp";
-import { getDb } from "./db";
+import { getDb, getPool } from "./db";
 import path from "path";
 import fs from "fs";
 
@@ -4089,6 +4089,326 @@ export async function registerRoutes(
     }
   });
 
+
+  // ============================================
+  // NEWSLETTER SUBSCRIBE
+  // ============================================
+
+  const newsletterSubscribeSchema = z.object({
+    email:     z.string().email(),
+    nombre:    z.string().min(1).max(100).optional(),
+    intereses: z.array(z.string()).optional(),
+  });
+
+  app.post("/api/newsletter/subscribe", async (req, res) => {
+    try {
+      const parsed = newsletterSubscribeSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const { email, nombre, intereses } = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { newsletterSubscribers } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      // Check duplicate
+      const existing = await db
+        .select()
+        .from(newsletterSubscribers)
+        .where(eq(newsletterSubscribers.email, email.trim().toLowerCase()))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return res.status(200).json({ ok: true, message: "Ya estás suscrito/a a nuestro newsletter." });
+      }
+
+      await db.insert(newsletterSubscribers).values({
+        brandId,
+        email:     email.trim().toLowerCase(),
+        nombre:    nombre ? sanitizeInput(nombre) : null,
+        intereses: intereses || [],
+        activo:    true,
+      });
+
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(
+        brandCode,
+        `📧 NUEVO SUSCRIPTOR\n📬 ${email}${nombre ? `\n👤 ${nombre}` : ""}${intereses?.length ? `\n🏷️ ${intereses.join(", ")}` : ""}`
+      );
+
+      return res.status(201).json({ ok: true, message: "¡Suscripción exitosa! Recibirás nuestras mejores ofertas cada semana." });
+    } catch (err: any) {
+      console.error("[newsletter] subscribe error:", err.message);
+      return res.status(500).json({ error: "Error al procesar suscripción" });
+    }
+  });
+
+  // Newsletter stats for admin dashboard
+  app.get("/api/admin/newsletter/stats", async (req, res) => {
+    try {
+      const db = getDb();
+      const { newsletterSubscribers, brands: brandsTable } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      const allBrands = await db.select().from(brandsTable).where(eq(brandsTable.active, true));
+      const stats: Record<string, number> = {};
+
+      for (const brand of allBrands) {
+        const subs = await db
+          .select()
+          .from(newsletterSubscribers)
+          .where(and(eq(newsletterSubscribers.brandId, brand.id), eq(newsletterSubscribers.activo, true)));
+        stats[brand.code] = subs.length;
+      }
+
+      const total = Object.values(stats).reduce((a, b) => a + b, 0);
+      return res.json({ total, byBrand: stats });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // LEADS — SEGURO DE VIAJE
+  // ============================================
+
+  const seguroSchema = z.object({
+    nombre:      z.string().min(2).max(120),
+    email:       z.string().email(),
+    telefono:    z.string().min(8).max(20),
+    destino:     z.string().min(2).max(120),
+    fechaViaje:  z.string().min(3).max(60),
+    viajeros:    z.coerce.number().int().min(1).max(50),
+  });
+
+  app.post("/api/leads/seguro", async (req, res) => {
+    try {
+      const parsed = seguroSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.errors });
+
+      const d = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { leads: leadsTable } = await import("@shared/schema");
+      const [lead] = await db.insert(leadsTable).values({
+        brandId,
+        name:        sanitizeInput(d.nombre),
+        email:       d.email.trim().toLowerCase(),
+        phone:       sanitizeInput(d.telefono),
+        destination: sanitizeInput(d.destino),
+        travelDates: sanitizeInput(d.fechaViaje),
+        message:     `SEGURO DE VIAJE | ${d.viajeros} viajero(s)`,
+        source:      "formulario-seguros",
+        status:      "new",
+      }).returning();
+
+      const msg = `🛡️ COTIZACIÓN SEGURO\n━━━━━━━━━━━━━\n👤 ${d.nombre}\n📱 ${d.telefono}\n📧 ${d.email}\n🌍 ${d.destino}\n📅 ${d.fechaViaje}\n👥 ${d.viajeros} viajero(s)`;
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(brandCode, msg);
+
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (err: any) {
+      console.error("[seguro] error:", err.message);
+      return res.status(500).json({ error: "Error al registrar solicitud de seguro" });
+    }
+  });
+
+  // ============================================
+  // ADMIN — REPORTE DE COMISIONES
+  // ============================================
+
+  app.get("/api/admin/comisiones", async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const mes = (req.query.mes as string) || new Date().toISOString().slice(0, 7);
+      const [year, month] = mes.split("-").map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+
+      const { rows } = await pool.query(`
+        SELECT
+          r.id,
+          r.guest_name AS cliente,
+          r.hotel      AS destino,
+          r.check_in   AS fecha_viaje,
+          r.precio_venta::numeric             AS precio_venta,
+          (r.tarifa_publica_total::numeric * 0.85) AS costo_neto,
+          (r.precio_venta::numeric - r.tarifa_publica_total::numeric * 0.85) AS comision,
+          CASE WHEN r.precio_venta::numeric > 0
+            THEN ROUND(((r.precio_venta::numeric - r.tarifa_publica_total::numeric * 0.85) / r.precio_venta::numeric) * 100, 2)
+            ELSE 0
+          END AS porcentaje_comision,
+          r.status,
+          b.code AS brand_code
+        FROM reservas r
+        LEFT JOIN brands b ON b.id = r.brand_id
+        WHERE r.status = 'confirmed'
+          AND r.confirmed_at >= $1
+          AND r.confirmed_at <= $2
+        ORDER BY r.confirmed_at DESC
+      `, [startDate, endDate]);
+
+      const totalVendido  = rows.reduce((s: number, r: any) => s + parseFloat(r.precio_venta || 0), 0);
+      const totalComision = rows.reduce((s: number, r: any) => s + parseFloat(r.comision || 0), 0);
+      const margenPromedio = totalVendido > 0 ? (totalComision / totalVendido) * 100 : 0;
+
+      return res.json({
+        mes,
+        reservas: rows,
+        totales: {
+          totalVendido:    Math.round(totalVendido),
+          totalComision:   Math.round(totalComision),
+          margenPromedio:  Math.round(margenPromedio * 100) / 100,
+          cantidadReservas: rows.length,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // ADMIN — PIPELINE DE VENTAS
+  // ============================================
+
+  app.get("/api/admin/pipeline", async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const [leadsRows, holdsRows, ganados] = await Promise.all([
+        pool.query(`
+          SELECT id, name AS nombre, destination AS destino, status,
+                 created_at,
+                 EXTRACT(EPOCH FROM (NOW() - created_at))/86400 AS dias_en_estado
+          FROM leads
+          ORDER BY created_at DESC
+          LIMIT 500
+        `),
+        pool.query(`
+          SELECT r.id, r.guest_name AS nombre, r.hotel AS destino, r.status,
+                 r.precio_venta::numeric AS presupuesto, r.created_at,
+                 EXTRACT(EPOCH FROM (NOW() - r.created_at))/86400 AS dias_en_estado
+          FROM reservas r
+          WHERE r.status IN ('hold','pending_payment')
+          ORDER BY r.created_at DESC
+          LIMIT 200
+        `),
+        pool.query(`
+          SELECT r.id, r.guest_name AS nombre, r.hotel AS destino, r.status,
+                 r.precio_venta::numeric AS presupuesto, r.confirmed_at AS created_at,
+                 EXTRACT(EPOCH FROM (NOW() - COALESCE(r.confirmed_at, r.created_at)))/86400 AS dias_en_estado
+          FROM reservas r
+          WHERE r.status = 'confirmed'
+          ORDER BY r.confirmed_at DESC
+          LIMIT 200
+        `),
+      ]);
+
+      const leads = leadsRows.rows;
+
+      const pipeline = {
+        nuevo: {
+          items: leads.filter((l: any) => l.status === 'new'),
+          label: "Nuevo",
+          color: "blue",
+        },
+        contactado: {
+          items: leads.filter((l: any) => ['contacted','qualified','following'].includes(l.status)),
+          label: "Contactado",
+          color: "purple",
+        },
+        cotizado: {
+          items: leads.filter((l: any) => ['hot','cotizado','proposal'].includes(l.status)),
+          label: "Cotizado",
+          color: "amber",
+        },
+        hold_activo: {
+          items: holdsRows.rows,
+          label: "Hold Activo",
+          color: "orange",
+        },
+        ganado: {
+          items: ganados.rows,
+          label: "Ganado",
+          color: "green",
+        },
+        perdido: {
+          items: leads.filter((l: any) => ['lost','cold','closed','disqualified'].includes(l.status)),
+          label: "Perdido",
+          color: "red",
+        },
+      };
+
+      const result: Record<string, any> = {};
+      for (const [key, col] of Object.entries(pipeline)) {
+        const presupuestoTotal = (col.items as any[]).reduce((s: number, i: any) => {
+          return s + (parseFloat(i.presupuesto || 0));
+        }, 0);
+        result[key] = {
+          label:            col.label,
+          color:            col.color,
+          cantidad:         col.items.length,
+          presupuestoTotal: Math.round(presupuestoTotal),
+          items:            col.items.slice(0, 50),
+        };
+      }
+
+      return res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // ADMIN — CALENDARIO DE CHECK-INS
+  // ============================================
+
+  app.get("/api/admin/checkins", async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const mes = (req.query.mes as string) || new Date().toISOString().slice(0, 7);
+      const [year, month] = mes.split("-").map(Number);
+      const startDate = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10);
+
+      const { rows } = await pool.query(`
+        SELECT
+          DATE(check_in::date) AS fecha,
+          hotel,
+          guest_name,
+          habitaciones_reservadas,
+          precio_venta::numeric AS monto,
+          status,
+          confirmation_code
+        FROM reservas
+        WHERE status = 'confirmed'
+          AND check_in::date >= $1
+          AND check_in::date <= $2
+        ORDER BY check_in ASC
+      `, [startDate, endDate]);
+
+      // Group by date
+      const byDate: Record<string, any[]> = {};
+      for (const row of rows) {
+        const d = String(row.fecha).slice(0, 10);
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(row);
+      }
+
+      return res.json({ mes, checkins: byDate, total: rows.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   return httpServer;
 }

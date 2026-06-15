@@ -9,6 +9,9 @@ import {
   FileText,
   MapPin,
   Building2,
+  KanbanSquare,
+  Mail,
+  Shield,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +40,11 @@ interface BrandStats {
   customers: number;
   posts: number;
   destinations: number;
+}
+
+interface NewsletterStats {
+  total: number;
+  byBrand: Record<string, number>;
 }
 
 interface MultiBrandStats {
@@ -130,8 +138,29 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/leads"],
   });
 
+  const { data: newsletterStats } = useQuery<NewsletterStats>({
+    queryKey: ["/api/admin/newsletter/stats"],
+  });
+
+  const { data: pipeline } = useQuery({
+    queryKey: ["/api/admin/pipeline"],
+  });
+
+  const { data: checkinsData } = useQuery({
+    queryKey: ["/api/admin/checkins", new Date().toISOString().slice(0, 7)],
+    queryFn: () =>
+      fetch(`/api/admin/checkins?mes=${new Date().toISOString().slice(0, 7)}`).then((r) => r.json()),
+  });
+
   const recentBookings = bookings?.slice(0, 5) || [];
   const recentLeads = leads?.slice(0, 3) || [];
+
+  // Quick stats from pipeline and checkins
+  const pipelineLeadsActivos = pipeline
+    ? (pipeline as any).nuevo?.cantidad + (pipeline as any).contactado?.cantidad + (pipeline as any).cotizado?.cantidad
+    : null;
+  const holdsActivos = pipeline ? (pipeline as any).hold_activo?.cantidad : null;
+  const proximosCheckins = checkinsData?.total ?? null;
   const totals = multiBrandStats?.totals;
   const brands = multiBrandStats?.brands || [];
 
@@ -207,6 +236,85 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
+
+      {/* CRM Quick Links */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/admin/pipeline">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Pipeline</p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {pipelineLeadsActivos !== null ? pipelineLeadsActivos : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">leads activos</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-purple-500">
+                  <KanbanSquare className="h-5 w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/checkins">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Check-ins este mes</p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {proximosCheckins !== null ? proximosCheckins : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">reservas confirmadas</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-green-500">
+                  <CalendarCheck className="h-5 w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/comisiones">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Comisiones</p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {holdsActivos !== null ? holdsActivos : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">holds activos</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-amber-500">
+                  <DollarSign className="h-5 w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/crm">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Newsletter</p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {newsletterStats?.total !== undefined ? newsletterStats.total : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">suscriptores activos</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-blue-500">
+                  <Mail className="h-5 w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

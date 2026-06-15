@@ -8,6 +8,7 @@ import { AuthProvider } from "@/lib/auth";
 import { BrandProvider } from "@/lib/brand-context";
 import { CookieConsent } from "@/components/cookie-consent";
 import { WhatsAppButton } from "@/components/whatsapp-button";
+import { NewsletterModal } from "@/components/newsletter-modal";
 import { PerformanceProvider } from "@/components/three-webgl";
 import Home from "@/pages/home";
 import Hotels from "@/pages/hotels";
@@ -56,6 +57,10 @@ import HotelSearch from "@/pages/hotel-search";
 import HotelBooking from "@/pages/hotel-booking";
 import Grupos from "@/pages/grupos";
 import Bodas from "@/pages/bodas";
+import SegurosViaje from "@/pages/seguros-viaje";
+import AdminComisiones from "@/pages/Admin/AdminComisiones";
+import AdminPipeline from "@/pages/Admin/AdminPipeline";
+import AdminCheckins from "@/pages/Admin/AdminCheckins";
 
 function Router() {
   return (
@@ -102,6 +107,10 @@ function Router() {
       <Route path="/bloqueos" component={Bloqueos} />
       <Route path="/grupos" component={Grupos} />
       <Route path="/bodas" component={Bodas} />
+      <Route path="/seguros" component={SegurosViaje} />
+      <Route path="/admin/comisiones" component={AdminComisiones} />
+      <Route path="/admin/pipeline" component={AdminPipeline} />
+      <Route path="/admin/checkins" component={AdminCheckins} />
       {/* Fenix Traveler — Xcaret Landings */}
       <Route path="/xcaret-familias" component={XcaretFamilias} />
       <Route path="/xcaret-aparta-2027" component={XcaretAparta2027} />
@@ -129,6 +138,7 @@ function App() {
                 <Router />
                 <WhatsAppButton />
                 <CookieConsent />
+                <NewsletterModal />
               </TooltipProvider>
             </PerformanceProvider>
           </AuthProvider>

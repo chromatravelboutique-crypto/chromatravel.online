@@ -11,6 +11,7 @@ import { startHoldExpiryJob } from "./jobs/hold-expiry";
 import { startCampaignDispatcher } from "./jobs/campaign-dispatcher";
 import { startStockAlertJob } from "./jobs/stock-alert";
 import { startDailyReportJob } from "./jobs/daily-report";
+import { startWeeklyNewsletterJob } from "./jobs/weekly-newsletter";
 import { createServer } from "http";
 import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
@@ -109,6 +110,9 @@ export function log(message: string, source = "express") {
 
   // Start daily ERP report (resumen diario a las 8am via WhatsApp)
   startDailyReportJob();
+
+  // Start weekly newsletter (lunes 9am — mejores ofertas de bloqueos)
+  startWeeklyNewsletterJob();
 
   // Domain redirect handled by Cloudflare Page Rule (apex → www)
 
