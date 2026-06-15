@@ -192,6 +192,7 @@ class AutomationService {
           userId: user.userId,
           channel: "email",
           status: "pending",
+          responseData: { discountCode },
         });
 
         console.log(`[Automation] Sent winback to ${user.firstName} ${user.lastName}`);

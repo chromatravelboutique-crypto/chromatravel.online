@@ -29,7 +29,7 @@ const initialBrands = [
     // Contact
     whatsappNumber: "+524434044104",
     whatsappMessage: "Hola! Me interesa planear mi viaje con Chroma Travel",
-    email: "hola@chromatravel.online",
+    email: "contacto@chromatravel.online",
     phone: "+52 55 1234 5678",
     address: "Ciudad de México, México",
     facebookUrl: "https://facebook.com/chromatravelonline",
@@ -218,7 +218,7 @@ async function seedAdminUsers() {
       lastName: "Chroma",
     },
     {
-      email: "contacto@fenixtraveler.com",
+      email: "eric.cervantes@fenixtraveler.com",
       brandCode: "fenix",
       firstName: "Admin",
       lastName: "Fenix",

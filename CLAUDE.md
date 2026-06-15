@@ -76,6 +76,13 @@ precioTarjeta      = precioVenta / (1 - 0.0418)            (divide method — ag
 
 **Fénix Points redemption**: `kuaniDescuento` is capped at `gananciaAgencia` — the 5% margin is never sacrificed.
 
+**Two-tier system (intentional, complementary):**
+- **Booking tier** (`pricing-engine.ts`): BASICO/MEDIO/PREMIUM by `tarifaNeta` — determines MSI installment plans and % of Fénix Points earned per booking.
+- **Loyalty tier** (`server/services/loyalty/index.ts`): Bronce/Plata/Oro/Platino/Diamante by accumulated points — determines discount % and point multipliers for future bookings.
+They interact as follows: booking tier determines how many points are earned per booking; loyalty tier determines the multiplier applied on top and the benefits unlocked.
+
+**AdSense**: Both brands share `googleAdsenseId: "ca-pub-9377043040912794"`. Revenue is not separated by brand by design — single publisher account. If separation is needed, create two AdSense sites under the same account.
+
 Use `calcularPrecioBloqueo({ precioHabitacion, adultos, menores, juniors, infantes, noches })` as the entry point from server routes. The `precioHabitacion` argument must already be the **total for all nights** (multiply by `noches` before passing).
 
 ### Bloqueos (hotel inventory)

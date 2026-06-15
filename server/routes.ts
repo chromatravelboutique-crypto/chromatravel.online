@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { registerOtaB2cRoutes } from "./ota-b2c-routes";
+import { scoreLeadData } from "./services/crm/lead-scoring.service";
 import { calcularPrecioBloqueo, type KuaniTier } from "@shared/pricing-engine";
 import { storage } from "./storage";
 import { insertLeadSchema, insertBookingSchema, insertUserSchema, searchFiltersSchema, loginSchema } from "@shared/schema";
@@ -149,21 +150,6 @@ const crmWhatsAppBirthdaySchema = z.object({
   codigoDescuento: z.string().optional(),
   brandCode: z.enum(['fenix', 'chroma']).optional()
 });
-
-function scoreLeadData(data: { phone?: string | null; destination?: string | null; travelDates?: string | null; message?: string | null; source?: string | null }): { points: number; category: 'HOT' | 'WARM' | 'COLD' } {
-  let points = 0;
-  if (data.phone) points += 25;
-  if (data.destination) points += 20;
-  if (data.travelDates) points += 20;
-  if (data.message && data.message.length > 10) points += 15;
-  if (data.source === 'whatsapp' || data.source === 'referral') points += 10;
-  if (data.source === 'widget-cotizador' || data.source === 'exit-intent') points += 5;
-  points += 10;
-  let category: 'HOT' | 'WARM' | 'COLD' = 'COLD';
-  if (points >= 70) category = 'HOT';
-  else if (points >= 40) category = 'WARM';
-  return { points, category };
-}
 
 export async function registerRoutes(
   httpServer: Server,
