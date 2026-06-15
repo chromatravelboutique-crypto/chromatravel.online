@@ -137,6 +137,36 @@ UI components from shadcn/ui (Radix primitives). `client/src/components/ui/` hol
 
 The main booking UX entry point is `client/src/components/tarifas-especiales-section.tsx` — the public rates grid + cotizador modal that calls `/api/reservar-precompra`.
 
+### Blog system (dual-track)
+Two parallel blog backends coexist — use whichever is appropriate per route:
+- **`server/markdown-blog.ts`** — Loads posts from `/posts/*.md` with gray-matter front matter; mtime-based in-memory cache.
+- **`server/static-blog.ts`** — Loads from `server/content/blog/posts.json`; used when no markdown files exist.
+
+AI blog generation (`server/services/ai/blog-generator.service.ts`) writes SEO posts (title, slug, content, meta, tags, excerpt). The `AdminBlogGenerator` dashboard page drives this.
+
+### Background jobs (`server/jobs/`)
+All jobs are scheduled in `server/index.ts`. Do not add cron logic elsewhere.
+- **`hold-expiry.ts`** — Every 5 min: expires holds and restores `habitaciones_disponibles`.
+- **`automation.jobs.ts`** — CRM cron: birthday messages, cold-lead follow-up.
+- **`campaign-dispatcher.ts`** — Every 5 min: dispatches pending `campaign_logs` via Twilio/Nodemailer; sets status `sent`/`failed`.
+- **`cleanup-bloqueos.ts`** — Daily: deletes bloqueos with `fecha_inicio` < today + `CLEANUP_DAYS_AHEAD` (env, default 10).
+- **`daily-report.ts`** — Daily 8am: WhatsApp report to admin (leads, revenue, pending holds, low stock).
+- **`stock-alert.ts`** — Every 15 min: alerts admin when a bloqueo has ≤2 `habitaciones_disponibles` (deduped per bloqueo per day).
+- **`weekly-newsletter.ts`** — Monday 9am: sends top 3 bloqueo offers to newsletter subscribers by email.
+
+### AI services (`server/services/ai/`)
+Provider abstraction in `provider.ts`; concrete implementations: `anthropic-provider.ts`, `openai-provider.ts`, `mock-provider.ts` (dev). Specialized service layer on top:
+- **`blog-generator.service.ts`** — SEO blog post generation.
+- **`smart-quoter.service.ts`** — Recommends bloqueos based on lead profile (destination, budget, dates, pax).
+- **`campaign-copy.service.ts`** — Generates campaign copy with brand-appropriate tone (premium for Fénix, inclusive for Chroma).
+- **`whatsapp-ai.service.ts`** — Drives the WhatsApp bot conversation flow.
+
+### Bedbank providers (`server/services/bedbanks/providers/`)
+Three providers available: Hotelbeds (primary, HMAC auth), TBO (`tbo-provider.ts`), Ratehawk (`ratehawk-provider.ts`). All fall back to mock data when env vars absent. `server/tbo-holidays.ts` defines the full TBO search→prebook→book→cancel type flow.
+
+### Maintenance script
+`scripts/weekly-maintenance.mjs` — run manually on Mondays (the session-start hook reminds you). Checks domain health, monitors hot leads and low stock, generates and publishes weekly blog post (alternating brand each week by ISO week parity), and writes CSV reports to `/reports/`.
+
 ### Startup seeds (auto-run in `server/index.ts`)
 1. `seed-brands.ts` — upserts Chroma + Fénix brand rows
 2. `seed-bloqueos.ts` — seeds 625 base inventory blocks if table is empty
