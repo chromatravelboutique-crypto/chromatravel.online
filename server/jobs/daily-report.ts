@@ -7,6 +7,7 @@ import cron from "node-cron";
 import { getPool, getDb } from "../db";
 import { brands } from "@shared/schema";
 import { sendBrandAdminAlert } from "../services/notification.service";
+import { callClaude } from "../services/ai/claude";
 
 async function buildReport(brandId: string, brandCode: string): Promise<string> {
   const pool = getPool();
@@ -46,15 +47,33 @@ async function buildReport(brandId: string, brandCode: string): Promise<string> 
 
   const fecha = yesterday.toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
 
-  return `📊 REPORTE DIARIO ${brandCode.toUpperCase()}
+  const baseReport = `📊 REPORTE DIARIO ${brandCode.toUpperCase()}
 📅 ${fecha}
 ━━━━━━━━━━━━━━━━━━━
 🔔 Nuevos leads: ${nuevosLeads}
 ✅ Reservas confirmadas: ${reservas} ($${montoMXN.toLocaleString("es-MX")} MXN)
 ⏳ Holds pendientes: ${holdsActivos}
 ⚠️ Bloqueos stock bajo: ${stockBajo}
-━━━━━━━━━━━━━━━━━━━
-Buenos días. 🌅`;
+━━━━━━━━━━━━━━━━━━━`;
+
+  try {
+    const aiAnalysis = await callClaude({
+      system: "Eres un analista de negocios de turismo. Analiza los datos del día y da 1-2 recomendaciones concretas y accionables en máximo 3 líneas. Responde en español, sin formato markdown.",
+      messages: [{
+        role: "user",
+        content: `Datos del día para ${brandCode}: Leads nuevos: ${nuevosLeads}, Reservas confirmadas: ${reservas} por $${montoMXN.toLocaleString()} MXN, Holds pendientes: ${holdsActivos}, Bloqueos con stock bajo: ${stockBajo}. ¿Qué recomiendas?`,
+      }],
+      maxTokens: 200,
+      temperature: 0.7,
+    });
+    if (aiAnalysis) {
+      return `${baseReport}\n💡 Análisis IA:\n${aiAnalysis}\n━━━━━━━━━━━━━━━━━━━\nBuenos días. 🌅`;
+    }
+  } catch {
+    // AI unavailable — send base report
+  }
+
+  return `${baseReport}\nBuenos días. 🌅`;
 }
 
 async function sendDailyReports(): Promise<void> {

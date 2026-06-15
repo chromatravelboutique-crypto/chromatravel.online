@@ -11,7 +11,8 @@ import {
   Building2,
   KanbanSquare,
   Mail,
-  Shield,
+  Flame,
+  MessageCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,16 @@ import {
 import { Link } from "wouter";
 import { DashboardLayout } from "./dashboard-layout";
 import type { Booking, Lead } from "@shared/schema";
+
+interface HotLead {
+  id: string;
+  name: string;
+  destination?: string | null;
+  phone?: string | null;
+  score?: number | null;
+  aiScoreReason?: string | null;
+  aiNextAction?: string | null;
+}
 
 interface BrandStats {
   brandId: string;
@@ -144,6 +155,10 @@ export default function AdminDashboard() {
 
   const { data: pipeline } = useQuery({
     queryKey: ["/api/admin/pipeline"],
+  });
+
+  const { data: hotLeads } = useQuery<HotLead[]>({
+    queryKey: ["/api/admin/leads/hot"],
   });
 
   const { data: checkinsData } = useQuery({
@@ -315,6 +330,60 @@ export default function AdminDashboard() {
           </Card>
         </Link>
       </div>
+
+      {/* Hot Leads Widget */}
+      {hotLeads && hotLeads.length > 0 && (
+        <Card className="mb-6 border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-red-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="flex items-center gap-2 font-display text-base">
+              <Flame className="h-5 w-5 text-orange-500" />
+              Leads Calientes 🔥
+            </CardTitle>
+            <Link href="/dashboard/leads">
+              <Button variant="ghost" size="sm" className="text-xs">Ver todos</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {hotLeads.slice(0, 5).map((lead) => (
+                <div key={lead.id} className="flex items-start justify-between gap-3 rounded-lg border bg-background/60 p-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium truncate">{lead.name}</p>
+                      <Badge className="bg-orange-500 text-white text-xs shrink-0">
+                        {lead.score}pts
+                      </Badge>
+                    </div>
+                    {lead.destination && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin className="h-3 w-3" />
+                        {lead.destination}
+                      </p>
+                    )}
+                    {lead.aiNextAction && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                        → {lead.aiNextAction}
+                      </p>
+                    )}
+                  </div>
+                  {lead.phone && (
+                    <a
+                      href={`https://wa.me/${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${lead.name.split(" ")[0]}! Te contacto de Chroma Travel sobre tu consulta de viaje a ${lead.destination || "tu destino"}. ¿Cómo te puedo ayudar?`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button size="sm" variant="outline" className="shrink-0 text-xs">
+                        <MessageCircle className="h-3.5 w-3.5 mr-1" />
+                        WhatsApp
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

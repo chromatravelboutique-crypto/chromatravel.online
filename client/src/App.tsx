@@ -61,6 +61,8 @@ import SegurosViaje from "@/pages/seguros-viaje";
 import AdminComisiones from "@/pages/Admin/AdminComisiones";
 import AdminPipeline from "@/pages/Admin/AdminPipeline";
 import AdminCheckins from "@/pages/Admin/AdminCheckins";
+import AdminBlogGenerator from "@/pages/Admin/AdminBlogGenerator";
+import Cotizador from "@/pages/cotizador";
 
 function Router() {
   return (
@@ -111,6 +113,8 @@ function Router() {
       <Route path="/admin/comisiones" component={AdminComisiones} />
       <Route path="/admin/pipeline" component={AdminPipeline} />
       <Route path="/admin/checkins" component={AdminCheckins} />
+      <Route path="/admin/blog/nuevo" component={AdminBlogGenerator} />
+      <Route path="/cotizador" component={Cotizador} />
       {/* Fenix Traveler — Xcaret Landings */}
       <Route path="/xcaret-familias" component={XcaretFamilias} />
       <Route path="/xcaret-aparta-2027" component={XcaretAparta2027} />

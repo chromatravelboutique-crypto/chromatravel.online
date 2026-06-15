@@ -4410,5 +4410,158 @@ export async function registerRoutes(
     }
   });
 
+  // ── IA: Smart Quoter ──────────────────────────────────────────────────────
+  app.post("/api/ai/smart-quote", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const { destino, presupuesto, checkIn, checkOut, personas, brandCode } = req.body as {
+        destino?: string;
+        presupuesto?: string;
+        checkIn?: string;
+        checkOut?: string;
+        personas?: number;
+        brandCode?: string;
+      };
+
+      const { generateSmartQuote } = await import("./services/ai/smart-quoter.service");
+      const brand = req.brand;
+
+      const { rows } = await pool.query(`
+        SELECT id, hotel, tipo_habitacion, fecha_inicio, fecha_fin,
+               tarifa_doble::numeric AS tarifa_doble,
+               habitaciones_disponibles
+        FROM bloqueos
+        WHERE estado = 'Activo'
+          AND habitaciones_disponibles > 0
+          AND fecha_inicio >= CURRENT_DATE
+          AND (marca IS NULL OR marca = $1)
+        ORDER BY tarifa_doble ASC
+        LIMIT 60
+      `, [brandCode || brand?.code || "chroma"]);
+
+      const blocks = rows.map((r: any) => ({
+        id: Number(r.id),
+        hotel: r.hotel,
+        tipo_habitacion: r.tipo_habitacion,
+        fecha_inicio: r.fecha_inicio,
+        fecha_fin: r.fecha_fin,
+        tarifa_doble: parseFloat(r.tarifa_doble),
+        habitaciones_disponibles: r.habitaciones_disponibles,
+      }));
+
+      const recommendations = await generateSmartQuote(
+        brand?.name || "Chroma Travel",
+        { destino, presupuesto, checkIn, checkOut, personas },
+        blocks
+      );
+
+      return res.json({ recommendations });
+    } catch (err: any) {
+      console.error("[smart-quote]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── IA: Blog Generator ───────────────────────────────────────────────────
+  app.post("/api/admin/blog/generate", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { topic, keywords, brandCode, whatsappNumber, domain, targetLength } = req.body as {
+        topic: string;
+        keywords: string[];
+        brandCode?: string;
+        whatsappNumber?: string;
+        domain?: string;
+        targetLength?: number;
+      };
+
+      if (!topic) return res.status(400).json({ error: "topic requerido" });
+
+      const { generateBlogPost } = await import("./services/ai/blog-generator.service");
+      const brand = req.brand;
+      const code = brandCode || brand?.code || "chroma";
+      const brandName = brand?.name || (code === "fenix" ? "Fénix Traveler" : "Chroma Travel");
+
+      const post = await generateBlogPost({
+        topic,
+        keywords: keywords || [],
+        brandName,
+        brandCode: code,
+        whatsappNumber,
+        domain,
+        targetLength,
+      });
+
+      if (!post) return res.status(500).json({ error: "No se pudo generar el post" });
+      return res.json(post);
+    } catch (err: any) {
+      console.error("[blog/generate]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/blog/publish", requireAdminRole, async (req, res) => {
+    try {
+      const { slug, title, content, metaDescription, tags, brandCode } = req.body as {
+        slug: string;
+        title: string;
+        content: string;
+        metaDescription?: string;
+        tags?: string[];
+        brandCode?: string;
+      };
+
+      if (!slug || !content) return res.status(400).json({ error: "slug y content requeridos" });
+
+      const path = await import("path");
+      const fs = await import("fs/promises");
+      const postsDir = path.join(process.cwd(), "posts");
+
+      await fs.mkdir(postsDir, { recursive: true });
+
+      const brand = req.brand;
+      const code = brandCode || brand?.code || "chroma";
+      const today = new Date().toISOString().slice(0, 10);
+
+      const frontmatter = `---
+title: "${title.replace(/"/g, '\\"')}"
+date: "${today}"
+brand: "${code}"
+tags: [${(tags || []).map((t) => `"${t}"`).join(", ")}]
+metaDescription: "${(metaDescription || "").replace(/"/g, '\\"')}"
+---
+
+`;
+      const filePath = path.join(postsDir, `${slug}.md`);
+      await fs.writeFile(filePath, frontmatter + content, "utf-8");
+
+      return res.json({ ok: true, file: `posts/${slug}.md` });
+    } catch (err: any) {
+      console.error("[blog/publish]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── IA: Hot Leads ────────────────────────────────────────────────────────
+  app.get("/api/admin/leads/hot", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const db = getDb();
+      const { leads: leadsTable } = await import("@shared/schema");
+      const { gte, desc: descOp } = await import("drizzle-orm");
+
+      const hotLeads = await db
+        .select()
+        .from(leadsTable)
+        .where(gte(leadsTable.score, 70))
+        .orderBy(descOp(leadsTable.score))
+        .limit(20);
+
+      return res.json(hotLeads);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return httpServer;
 }
