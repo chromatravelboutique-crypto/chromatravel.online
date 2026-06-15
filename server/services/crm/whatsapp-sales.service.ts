@@ -279,7 +279,7 @@ class WhatsAppSalesService {
     const [existingLead] = await db
       .select()
       .from(leads)
-      .where(eq(leads.phone, phoneNumber));
+      .where(and(eq(leads.phone, phoneNumber), eq(leads.brandId, brandId)));
 
     if (existingLead) {
       await db
@@ -289,10 +289,11 @@ class WhatsAppSalesService {
       return existingLead;
     }
 
+    const phone = phoneNumber.replace(/\D/g, "");
     const [lead] = await db.insert(leads).values({
       brandId,
       name: `WhatsApp ${phoneNumber}`,
-      email: `wa_${phoneNumber.replace(/\D/g, "")}@placeholder.com`,
+      email: `wa_${phone}_${brandId.slice(0, 8)}@placeholder.com`,
       phone: phoneNumber,
       destination: context.destination,
       travelDates: context.dates,

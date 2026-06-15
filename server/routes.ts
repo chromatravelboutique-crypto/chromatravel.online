@@ -3851,13 +3851,13 @@ export async function registerRoutes(
       const dataQuery = `SELECT * FROM bloqueos ${whereClause} ORDER BY hotel, fecha_inicio LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
       const dataParams = [...params, limit, offset];
       
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const [countResult, dataResult] = await Promise.all([
         pool.query(countQuery, params),
         pool.query(dataQuery, dataParams),
       ]);
-      await pool.end();
       
       const total = parseInt(countResult.rows[0].count);
       
@@ -3875,10 +3875,10 @@ export async function registerRoutes(
 
   app.get("/api/admin/bloqueos/hotels", requireAgentOrAdmin, async (req, res) => {
     try {
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const result = await pool.query('SELECT DISTINCT hotel, proveedor, COUNT(*) as total_bloqueos FROM bloqueos WHERE estado = $1 GROUP BY hotel, proveedor ORDER BY hotel', ['Activo']);
-      await pool.end();
       res.json(result.rows);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3891,8 +3891,9 @@ export async function registerRoutes(
   
   app.get("/api/admin/audit-logs", requireAdminRole, async (req, res) => {
     try {
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const limit = parseInt(req.query.limit as string) || 50;
       const entityType = req.query.entityType as string | undefined;
       
@@ -3910,7 +3911,6 @@ export async function registerRoutes(
       params.push(limit);
       
       const result = await pool.query(query, params);
-      await pool.end();
       res.json(result.rows);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3919,13 +3919,13 @@ export async function registerRoutes(
 
   app.get("/api/admin/lead-history/:leadId", requireAgentOrAdmin, async (req, res) => {
     try {
-      const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const { getPool } = await import("./db");
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
       const result = await pool.query(
         'SELECT lsh.*, u.email as changed_by_email FROM lead_status_history lsh LEFT JOIN users u ON lsh.changed_by = u.id WHERE lsh.lead_id = $1 ORDER BY lsh.changed_at DESC',
         [req.params.leadId]
       );
-      await pool.end();
       res.json(result.rows);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -3946,7 +3946,7 @@ export async function registerRoutes(
       const today = new Date().toISOString().split('T')[0];
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
-      const [bloqueos, leads, leadsHoy, leadsEsteMes, topDestinos, stockBajo] = await Promise.all([
+      const [bloqueos, leads, leadsHoy, leadsEsteMes, topDestinos, stockBajo, reservasStats] = await Promise.all([
         pool.query(`SELECT COUNT(*) as total,
           SUM(habitaciones_disponibles) as disponibles,
           SUM(CASE WHEN habitaciones_disponibles = 0 THEN 1 ELSE 0 END) as agotados,
@@ -3961,8 +3961,15 @@ export async function registerRoutes(
         pool.query(`SELECT hotel, destino, habitaciones_disponibles, fecha_inicio as check_in
           FROM bloqueos WHERE estado = 'Activo' AND habitaciones_disponibles <= 3 AND fecha_inicio >= $1
           ORDER BY habitaciones_disponibles ASC, fecha_inicio ASC LIMIT 10`, [today]),
+        pool.query(`SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN status IN ('hold','pending_payment') THEN 1 ELSE 0 END) as pendientes,
+          SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmadas,
+          SUM(CASE WHEN status = 'confirmed' AND created_at >= $1 THEN CAST(precio_venta AS numeric) ELSE 0 END) as monto_confirmado_mes
+          FROM reservas`, [monthStart]),
       ]);
 
+      const r = reservasStats.rows[0];
       res.json({
         inventario: {
           totalBloqueos: parseInt(bloqueos.rows[0].total),
@@ -3975,7 +3982,12 @@ export async function registerRoutes(
           hoy: parseInt(leadsHoy.rows[0].total),
           esteMes: parseInt(leadsEsteMes.rows[0].total),
         },
-        reservas: { total: 0, pendientes: 0, confirmadas: 0, montoConfirmadoMes: 0 },
+        reservas: {
+          total: parseInt(r.total),
+          pendientes: parseInt(r.pendientes),
+          confirmadas: parseInt(r.confirmadas),
+          montoConfirmadoMes: parseFloat(r.monto_confirmado_mes || 0),
+        },
         topDestinos: topDestinos.rows,
         stockBajo: stockBajo.rows,
       });

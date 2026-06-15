@@ -146,7 +146,7 @@ export default function PrivacyPolicy() {
               </ul>
               <p className="mt-4 leading-relaxed">
                 Para ejercer estos derechos, contáctanos en:{" "}
-                <a href="mailto:{brandEmail}" className="text-primary hover:underline">
+                <a href={`mailto:${brandEmail}`} className="text-primary hover:underline">
                   {brandEmail}
                 </a>
               </p>
@@ -184,7 +184,7 @@ export default function PrivacyPolicy() {
               </p>
               <div className="mt-4 rounded-lg border bg-muted/30 p-6">
                 <p><strong>{brandName}</strong></p>
-                <p className="mt-2">Email: <a href="mailto:{brandEmail}" className="text-primary hover:underline">{brandEmail}</a></p>
+                <p className="mt-2">Email: <a href={`mailto:${brandEmail}`} className="text-primary hover:underline">{brandEmail}</a></p>
                 <p>WhatsApp: <a href={`https://wa.me/${(brand?.whatsappNumber ?? "+524434044104").replace(/[^0-9]/g, "")}`} className="text-primary hover:underline">{brand?.whatsappNumber ?? "+52 443 404 4104"}</a></p>
                 <p className="mt-2">Sitio web: <a href={`https://${brandDomain}`} className="text-primary hover:underline">{brandDomain}</a></p>
               </div>

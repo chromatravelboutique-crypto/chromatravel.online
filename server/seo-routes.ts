@@ -193,7 +193,7 @@ export function registerSeoRoutes(app: Express) {
       for (const dest of allDestinations) {
         if (dest.slug) {
           pages.push({
-            url: `/destinos/${dest.slug}`,
+            url: `/destinations/${dest.slug}`,
             priority: 0.8,
             changefreq: "weekly"
           });
@@ -256,7 +256,7 @@ export function registerSeoRoutes(app: Express) {
       const allHotels = await getDatabase().select().from(hotels).where(hotelFilter);
       for (const hotel of allHotels) {
         pages.push({
-          url: `/hoteles/${hotel.id}`,
+          url: `/hotels/${hotel.id}`,
           priority: 0.8,
           changefreq: "weekly"
         });
