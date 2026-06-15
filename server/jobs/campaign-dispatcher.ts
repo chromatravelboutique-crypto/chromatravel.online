@@ -14,8 +14,8 @@ const JOB_INTERVAL_MS = 5 * 60 * 1000;
 const BATCH_SIZE = 50;
 
 export async function dispatchPendingLogs(): Promise<void> {
-  const db = getDb();
-  if (!db) return;
+  let db: ReturnType<typeof getDb>;
+  try { db = getDb(); } catch { return; }
 
   try {
     const pending = await db
@@ -130,7 +130,6 @@ export async function dispatchPendingLogs(): Promise<void> {
 }
 
 export function startCampaignDispatcher(): void {
-  dispatchPendingLogs();
-  setInterval(dispatchPendingLogs, JOB_INTERVAL_MS);
+  setInterval(() => { dispatchPendingLogs().catch(() => {}); }, JOB_INTERVAL_MS);
   console.log("[campaign-dispatcher] Job iniciado — despacho cada 5 min");
 }
