@@ -22,11 +22,11 @@ const initialBrands = [
     primaryColor: "#10b981",
     secondaryColor: "#ec4899",
     accentColor: "#f59e0b",
-    logoUrl: "/assets/kueani-logo.png",
+    logoUrl: "/assets/kuani-chroma.png",
     faviconUrl: "/favicon.ico",
     
     // Contact
-    whatsappNumber: "+525512345678",
+    whatsappNumber: "+524434044104",
     whatsappMessage: "Hola! Me interesa planear mi viaje con Chroma Travel",
     email: "hola@chromatravel.online",
     phone: "+52 55 1234 5678",
@@ -99,11 +99,11 @@ const initialBrands = [
     primaryColor: "#b45309",
     secondaryColor: "#0f172a",
     accentColor: "#eab308",
-    logoUrl: "/assets/fenix-logo.png",
+    logoUrl: "/assets/kuani-fenix.png",
     faviconUrl: "/favicon-fenix.ico",
     
     // Contact
-    whatsappNumber: "+525598765432",
+    whatsappNumber: "+524435049568",
     whatsappMessage: "Hola! Me interesa planear mi viaje premium con Fenix Traveler",
     email: "contacto@fenixtraveler.com",
     phone: "+52 55 9876 5432",
@@ -179,7 +179,16 @@ export async function seedBrands() {
         await db.insert(brands).values(brandData as any);
         console.log(`Created brand: ${brandData.code}`);
       } else {
-        console.log(`Brand ${brandData.code} already exists, skipping`);
+        await db
+          .update(brands)
+          .set({
+            whatsappNumber: brandData.whatsappNumber,
+            logoUrl: brandData.logoUrl,
+            email: brandData.email,
+            phone: brandData.phone,
+          })
+          .where(eq(brands.code, brandData.code));
+        console.log(`Updated brand ${brandData.code} contact data`);
       }
     } catch (error) {
       console.error(`Error seeding brand ${brandData.code}:`, error);

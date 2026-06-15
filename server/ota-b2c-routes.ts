@@ -237,36 +237,7 @@ export async function createClipCharge(opts: {
 
 // ─── MODULE 3: Deposit logic (standalone) ────────────────────────────────────
 
-function calculateDepositRules(checkInDate: Date, totalAmount: number) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const ci = new Date(checkInDate);
-  ci.setHours(0, 0, 0, 0);
-  const days = Math.max(0, Math.round((ci.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-
-  let percent: number;
-  let label: string;
-  let policy: string;
-
-  if (days < 20) {
-    percent = 100;
-    label = "Pago total requerido";
-    policy = "Menos de 20 días al check-in — pago completo no reembolsable";
-  } else if (days <= 45) {
-    percent = 40;
-    label = "40% anticipo";
-    policy = "20-45 días al check-in — 40% anticipo no reembolsable";
-  } else {
-    percent = 20;
-    label = "20% anticipo";
-    policy = "60+ días al check-in — 20% anticipo no reembolsable";
-  }
-
-  const depositAmount = Math.ceil(totalAmount * percent / 100);
-  const balanceAmount = Math.max(0, totalAmount - depositAmount);
-
-  return { percent, label, policy, depositAmount, balanceAmount, daysUntilCheckIn: days, nonRefundable: true };
-}
+import { calculateDeposit } from "./modules/deposit.service";
 
 // ─── REGISTER ALL OTA B2C ROUTES ─────────────────────────────────────────────
 
@@ -289,7 +260,7 @@ export function registerOtaB2cRoutes(app: Express) {
     if (isNaN(checkInDate.getTime())) {
       return res.status(400).json({ error: "checkIn date inválida" });
     }
-    const result = calculateDepositRules(checkInDate, total);
+    const result = calculateDeposit(checkInDate, total);
     return res.json({ checkIn, total, currency: "MXN", ...result });
   });
 
@@ -739,7 +710,7 @@ export function registerOtaB2cRoutes(app: Express) {
       </div>
     </div>
     <a href="${shareUrl}" class="cta" target="_blank" rel="noopener">Ver disponibilidad →</a>
-    <div class="brand">chromatravel.online · Tarifas Negociadas Exclusivas</div>
+    <div class="brand">${(req as any).brand?.domain ?? "chromatravel.online"} · ${(req as any).brand?.name ?? "Tarifas Negociadas Exclusivas"}</div>
   </div>
 </body>
 </html>`;

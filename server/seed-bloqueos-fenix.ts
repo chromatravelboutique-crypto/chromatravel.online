@@ -56,7 +56,7 @@ interface BloqueoGroup {
   proveedor: string | null;
   habitaciones_disponibles: number;
   estado: string;
-  brand_id: number | null;
+  brand_id: string | null;
 }
 
 function parseNum(v: string): number | null {
@@ -95,7 +95,7 @@ export async function seedBloqueosFenix(): Promise<{ inserted: number; updated: 
   const brandRow = await dbPool.query(
     `SELECT id FROM brands WHERE domain = 'fenixtraveler.com' LIMIT 1`
   ).catch(() => ({ rows: [] as any[] }));
-  const fenixBrandId: number | null = brandRow.rows[0]?.id ?? null;
+  const fenixBrandId: string | null = brandRow.rows[0]?.id ?? null;
 
   const raw = fs.readFileSync(CSV_PATH, "utf-8")
     .replace(/^\uFEFF/, ""); // strip BOM

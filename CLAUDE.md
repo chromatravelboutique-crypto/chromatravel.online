@@ -93,10 +93,11 @@ hold → pending_payment → confirmed
 
 After `COMMIT`, call `loyaltyService.addPoints()` fire-and-forget — never await it inside the response path.
 
-### Deposit calculation (`serverGetDeposit` in `ota-b2c-routes.ts`)
-- > 60 days to check-in → 30% deposit
-- 30–60 days → 50% deposit
-- < 30 days → 100% (full payment, MSI eligible)
+### Deposit calculation (`serverGetDeposit` in `routes.ts` + `server/modules/deposit.service.ts`)
+- ≤ 10 days to check-in → 100% full payment (MSI eligible if precioVenta ≥ $7,000)
+- ≤ 24 days → 70% deposit
+- ≤ 89 days → 50% deposit
+- > 89 days → 30% deposit
 
 ### Auth roles
 `server/auth-middleware.ts` defines middleware: `requireAuth`, `requireAdmin`, `requireAgentOrAdmin`, `requireMarketing`, `requireRole(...roles)`. Session uses `connect-pg-simple` backed by `session` table (auto-created); falls back to `memorystore` when pool is null.

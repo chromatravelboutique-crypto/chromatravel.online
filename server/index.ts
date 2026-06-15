@@ -8,6 +8,7 @@ import { serveStatic } from "./static";
 import { initializeAutomationJobs } from "./jobs/automation.jobs";
 import { startCleanupJob } from "./jobs/cleanup-bloqueos";
 import { startHoldExpiryJob } from "./jobs/hold-expiry";
+import { startCampaignDispatcher } from "./jobs/campaign-dispatcher";
 import { createServer } from "http";
 import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
@@ -97,6 +98,9 @@ export function log(message: string, source = "express") {
 
   // Start hold expiry job (libera habitaciones de holds expirados cada 5 min)
   startHoldExpiryJob();
+
+  // Start campaign dispatcher (despacha campaignLogs pendientes cada 5 min)
+  startCampaignDispatcher();
 
   // Domain redirect handled by Cloudflare Page Rule (apex → www)
 

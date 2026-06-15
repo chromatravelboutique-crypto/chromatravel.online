@@ -73,7 +73,13 @@ class AutomationService {
           });
         }
 
+        const [birthdayCampaign] = await db
+          .select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(eq(campaigns.brandId, brandId), eq(campaigns.name, "Cumpleaños")));
+
         await db.insert(campaignLogs).values({
+          campaignId: birthdayCampaign?.id ?? null,
           userId: user.userId,
           channel: "whatsapp",
           status: "pending",
@@ -113,7 +119,13 @@ class AutomationService {
           .set({ status: "follow_up" })
           .where(eq(leads.id, lead.id));
 
+        const [followUpCampaign] = await db
+          .select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(eq(campaigns.brandId, brandId), eq(campaigns.name, "Follow-up Leads Fríos")));
+
         await db.insert(campaignLogs).values({
+          campaignId: followUpCampaign?.id ?? null,
           userId: lead.assignedTo || undefined,
           channel: "whatsapp",
           status: "pending",
@@ -170,7 +182,13 @@ class AutomationService {
           15
         );
 
+        const [winbackCampaign] = await db
+          .select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(eq(campaigns.brandId, brandId), eq(campaigns.name, "Winback Clientes Inactivos")));
+
         await db.insert(campaignLogs).values({
+          campaignId: winbackCampaign?.id ?? null,
           userId: user.userId,
           channel: "email",
           status: "pending",
@@ -212,7 +230,13 @@ class AutomationService {
 
     for (const booking of upcomingBookings) {
       try {
+        const [reminderCampaign] = await db
+          .select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(eq(campaigns.brandId, brandId), eq(campaigns.name, "Recordatorio Viaje")));
+
         await db.insert(campaignLogs).values({
+          campaignId: reminderCampaign?.id ?? null,
           userId: booking.userId || undefined,
           channel: "whatsapp",
           status: "pending",
