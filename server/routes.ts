@@ -30,6 +30,7 @@ import { sendEmail as sendCrmEmail, generateBirthdayEmail, generatePromoEmail, g
 import { readFeed, detectNewArticles, checkAndPublishNewContent, generateSocialButtons } from "./crm/rss-social";
 import { generateReceipt, generateProforma as generateProformaPdf, generateQRCode } from "./crm/document-generator";
 import { sendWhatsAppMessage, generateBookingWhatsAppMessage, generatePromoWhatsAppMessage, generateBirthdayWhatsAppMessage } from "./crm/whatsapp";
+import { getDb } from "./db";
 import path from "path";
 import fs from "fs";
 
@@ -853,30 +854,41 @@ export async function registerRoutes(
           replyTo: data.email,
         }).catch(err => console.error("Error sending staff notification:", err));
 
+        const reqBrand = (req as any).brand;
+        const brandName    = reqBrand?.name       || "Chroma Travel";
+        const brandEmail   = reqBrand?.email      || "contacto@chromatravel.online";
+        const brandWa      = reqBrand?.whatsappNumber || "+524434044104";
+        const brandColor   = reqBrand?.primaryColor   || "#10b981";
+        const holdExpiry   = expiresAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+
         const customerHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #10b981, #ec4899); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0;">Tu Cotizacion de Viaje</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0;">Referencia: ${ref}</p>
+            <div style="background: ${brandColor}; padding: 30px; text-align: center;">
+              <h1 style="color: white; margin: 0;">${brandName}</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0;">Tu cotización · Referencia: ${ref}</p>
             </div>
             <div style="padding: 30px; background: #f9f9f9;">
               <p>Hola <strong>${data.name}</strong>,</p>
-              <p>Recibimos tu solicitud de cotizacion. Un asesor revisara la disponibilidad y te contactara pronto.</p>
+              <p>Reservamos tu lugar por <strong>30 minutos</strong> (hasta las <strong>${holdExpiry}</strong>). Completa el pago para confirmar tu reserva.</p>
               <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #10b981;">${data.hotel}</h3>
+                <h3 style="margin-top: 0; color: ${brandColor};">${data.hotel}</h3>
                 <p><strong>Habitacion:</strong> ${data.roomType}</p>
                 <p><strong>Fechas:</strong> ${data.checkIn.split('T')[0]} al ${data.checkOut.split('T')[0]}</p>
                 <p><strong>Viajeros:</strong> ${data.adults} adultos${data.children > 0 ? `, ${data.children} menores` : ''}${data.juniors > 0 ? `, ${data.juniors} juniors` : ''}${data.infants > 0 ? `, ${data.infants} infantes` : ''}</p>
-                <p style="font-size: 20px; font-weight: bold; color: #10b981;">Total estimado: $${totalPrice.toLocaleString()} MXN</p>
+                <p style="font-size: 20px; font-weight: bold; color: ${brandColor};">Total estimado: $${totalPrice.toLocaleString()} MXN</p>
                 <p><strong>Anticipo requerido (${deposit.percent}%):</strong> $${depositAmount.toLocaleString()} MXN</p>
               </div>
               ${clipPaymentUrl ? `
               <div style="text-align: center; margin: 20px 0;">
-                <a href="${clipPaymentUrl}" style="display: inline-block; background: #10b981; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pagar anticipo ahora — $${depositTarjeta.toLocaleString()} MXN</a>
-                <p style="color: #666; font-size: 12px; margin-top: 8px;">Pago con tarjeta vía Clip. Tu reserva queda confirmada al pagar. El link expira en 30 minutos.</p>
-              </div>` : ''}
-              <p style="color: #666; font-size: 13px;">Esta cotizacion es informativa. Los precios estan sujetos a disponibilidad al momento de confirmar.</p>
-              <p style="margin-top: 30px;"><strong>Chroma Travel</strong><br><a href="mailto:contacto@chromatravel.online">contacto@chromatravel.online</a></p>
+                <a href="${clipPaymentUrl}" style="display: inline-block; background: ${brandColor}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pagar anticipo ahora — $${depositTarjeta.toLocaleString()} MXN</a>
+                <p style="color: #666; font-size: 12px; margin-top: 8px;">Pago con tarjeta vía Clip. Tu reserva queda confirmada al pagar. El link expira a las ${holdExpiry}.</p>
+              </div>` : `
+              <div style="background: #fff3e0; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; font-weight: bold;">¿Dudas? Escríbenos por WhatsApp</p>
+                <p style="margin: 8px 0 0;"><a href="https://wa.me/${brandWa.replace(/\D/g,"")}" style="color: ${brandColor}; font-size: 18px;">${brandWa}</a></p>
+              </div>`}
+              <p style="color: #666; font-size: 13px;">Los precios estan sujetos a disponibilidad al momento de confirmar.</p>
+              <p style="margin-top: 30px;"><strong>${brandName}</strong><br><a href="mailto:${brandEmail}">${brandEmail}</a>${brandWa ? ` · WhatsApp: ${brandWa}` : ''}</p>
             </div>
           </div>
         `;
@@ -1313,6 +1325,101 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid lead data", errors: error.errors });
       }
       res.status(500).json({ message: "Error creating lead" });
+    }
+  });
+
+  // ─── Grupos y Bodas ───────────────────────────────────────────────────────────
+
+  const grupoSchema = z.object({
+    nombre:         z.string().min(2).max(120),
+    telefono:       z.string().min(8).max(20),
+    email:          z.string().email(),
+    destino:        z.string().min(2).max(120),
+    personas:       z.number().int().min(15).max(500),
+    fechaAprox:     z.string().min(3).max(60),
+    presupuestoPax: z.string().min(1).max(60),
+    comentarios:    z.string().max(1000).optional(),
+  });
+
+  app.post("/api/leads/grupo", async (req, res) => {
+    try {
+      const parsed = grupoSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.errors });
+
+      const d = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { leads: leadsTable } = await import("@shared/schema");
+      const [lead] = await db.insert(leadsTable).values({
+        brandId,
+        name:        sanitizeInput(d.nombre),
+        email:       d.email.trim().toLowerCase(),
+        phone:       sanitizeInput(d.telefono),
+        destination: sanitizeInput(d.destino),
+        travelDates: sanitizeInput(d.fechaAprox),
+        message:     `GRUPO (${d.personas} personas) | Presupuesto/pax: ${d.presupuestoPax}${d.comentarios ? ` | ${sanitizeInput(d.comentarios)}` : ""}`,
+        source:      "formulario-grupos",
+        status:      "hot",
+      }).returning();
+
+      const msg = `👥 NUEVO LEAD GRUPO\n━━━━━━━━━━━━━━━\n👤 ${d.nombre}\n📱 ${d.telefono}\n📧 ${d.email}\n🌍 ${d.destino}\n👥 ${d.personas} personas\n📅 ${d.fechaAprox}\n💰 ${d.presupuestoPax}/pax${d.comentarios ? `\n💬 ${d.comentarios}` : ""}`;
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(brandCode, msg);
+
+      console.log(`[Grupos] Lead ${lead.id} | ${d.nombre} | ${d.personas} pax | ${d.destino}`);
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (err: any) {
+      console.error("[Grupos] error:", err.message);
+      return res.status(500).json({ error: "Error al registrar solicitud de grupo" });
+    }
+  });
+
+  const bodaSchema = z.object({
+    novios:       z.string().min(2).max(200),
+    telefono:     z.string().min(8).max(20),
+    email:        z.string().email(),
+    destino:      z.string().min(2).max(120),
+    fechaTentativa: z.string().min(3).max(60),
+    invitados:    z.number().int().min(1).max(1000),
+    presupuesto:  z.string().min(1).max(60),
+    hotelEnMente: z.string().max(200).optional(),
+    comentarios:  z.string().max(1000).optional(),
+  });
+
+  app.post("/api/leads/boda", async (req, res) => {
+    try {
+      const parsed = bodaSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.errors });
+
+      const d = parsed.data;
+      const brandId: string | null = (req as any).brand?.id ?? null;
+      const brandCode: string = (req as any).brand?.code ?? "chroma";
+      const db = getDb();
+
+      const { leads: leadsTable } = await import("@shared/schema");
+      const [lead] = await db.insert(leadsTable).values({
+        brandId,
+        name:        sanitizeInput(d.novios),
+        email:       d.email.trim().toLowerCase(),
+        phone:       sanitizeInput(d.telefono),
+        destination: sanitizeInput(d.destino),
+        travelDates: sanitizeInput(d.fechaTentativa),
+        message:     `BODA (${d.invitados} invitados) | Presupuesto: ${d.presupuesto}${d.hotelEnMente ? ` | Hotel: ${sanitizeInput(d.hotelEnMente)}` : ""}${d.comentarios ? ` | ${sanitizeInput(d.comentarios)}` : ""}`,
+        source:      "formulario-bodas",
+        status:      "hot",
+      }).returning();
+
+      const msg = `💍 NUEVO LEAD BODA\n━━━━━━━━━━━━━━━\n💑 ${d.novios}\n📱 ${d.telefono}\n📧 ${d.email}\n🌍 ${d.destino}\n📅 ${d.fechaTentativa}\n👥 ${d.invitados} invitados\n💰 ${d.presupuesto}${d.hotelEnMente ? `\n🏨 ${d.hotelEnMente}` : ""}${d.comentarios ? `\n💬 ${d.comentarios}` : ""}`;
+      const { sendBrandAdminAlert } = await import("./services/notification.service");
+      void sendBrandAdminAlert(brandCode, msg);
+
+      console.log(`[Bodas] Lead ${lead.id} | ${d.novios} | ${d.invitados} inv | ${d.destino}`);
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (err: any) {
+      console.error("[Bodas] error:", err.message);
+      return res.status(500).json({ error: "Error al registrar solicitud de boda" });
     }
   });
 

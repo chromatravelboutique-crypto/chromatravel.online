@@ -9,6 +9,8 @@ import { initializeAutomationJobs } from "./jobs/automation.jobs";
 import { startCleanupJob } from "./jobs/cleanup-bloqueos";
 import { startHoldExpiryJob } from "./jobs/hold-expiry";
 import { startCampaignDispatcher } from "./jobs/campaign-dispatcher";
+import { startStockAlertJob } from "./jobs/stock-alert";
+import { startDailyReportJob } from "./jobs/daily-report";
 import { createServer } from "http";
 import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
@@ -101,6 +103,12 @@ export function log(message: string, source = "express") {
 
   // Start campaign dispatcher (despacha campaignLogs pendientes cada 5 min)
   startCampaignDispatcher();
+
+  // Start stock low alert (avisa al admin cuando quedan ≤2 habitaciones en un bloqueo)
+  startStockAlertJob();
+
+  // Start daily ERP report (resumen diario a las 8am via WhatsApp)
+  startDailyReportJob();
 
   // Domain redirect handled by Cloudflare Page Rule (apex → www)
 

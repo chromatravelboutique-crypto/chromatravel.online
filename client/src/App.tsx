@@ -54,6 +54,8 @@ import XcaretBodaSimbolica from "@/pages/landings/xcaret-boda-simbolica";
 import XcaretLunaMielAdults from "@/pages/landings/xcaret-luna-miel-adults";
 import HotelSearch from "@/pages/hotel-search";
 import HotelBooking from "@/pages/hotel-booking";
+import Grupos from "@/pages/grupos";
+import Bodas from "@/pages/bodas";
 
 function Router() {
   return (
@@ -98,6 +100,8 @@ function Router() {
       <Route path="/lgbt" component={LGBTPage} />
       <Route path="/pride" component={LGBTPage} />
       <Route path="/bloqueos" component={Bloqueos} />
+      <Route path="/grupos" component={Grupos} />
+      <Route path="/bodas" component={Bodas} />
       {/* Fenix Traveler — Xcaret Landings */}
       <Route path="/xcaret-familias" component={XcaretFamilias} />
       <Route path="/xcaret-aparta-2027" component={XcaretAparta2027} />
