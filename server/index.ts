@@ -1,8 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import { createRequire } from "module";
-const _require = createRequire(import.meta.url);
+import memoryStoreFactory from "memorystore";
 import compression from "compression";
+const MemoryStore = memoryStoreFactory(session);
 import connectPgSimple from "connect-pg-simple";
 import path from "path";
 import { registerRoutes } from "./routes";
@@ -196,7 +196,7 @@ export function log(message: string, source = "express") {
   app.use(session({
     store: pool
       ? new PgStore({ pool, tableName: "session", createTableIfMissing: true })
-      : new (_require("memorystore")(session))({ checkPeriod: 86400000 }),
+      : new MemoryStore({ checkPeriod: 86400000 }),
     secret: sessionSecret || "dev-only-secret-not-for-production",
     resave: false,
     saveUninitialized: false,
