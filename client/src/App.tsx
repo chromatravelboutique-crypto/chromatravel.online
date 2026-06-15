@@ -62,6 +62,8 @@ import AdminComisiones from "@/pages/Admin/AdminComisiones";
 import AdminPipeline from "@/pages/Admin/AdminPipeline";
 import AdminCheckins from "@/pages/Admin/AdminCheckins";
 import AdminBlogGenerator from "@/pages/Admin/AdminBlogGenerator";
+import AdminCampaigns from "@/pages/Admin/AdminCampaigns";
+import AdminAutomations from "@/pages/Admin/AdminAutomations";
 import Cotizador from "@/pages/cotizador";
 
 function Router() {
@@ -114,6 +116,8 @@ function Router() {
       <Route path="/admin/pipeline" component={AdminPipeline} />
       <Route path="/admin/checkins" component={AdminCheckins} />
       <Route path="/admin/blog/nuevo" component={AdminBlogGenerator} />
+      <Route path="/admin/campaigns" component={AdminCampaigns} />
+      <Route path="/admin/automations" component={AdminAutomations} />
       <Route path="/cotizador" component={Cotizador} />
       {/* Fenix Traveler — Xcaret Landings */}
       <Route path="/xcaret-familias" component={XcaretFamilias} />

@@ -13,6 +13,8 @@ import {
   Mail,
   Flame,
   MessageCircle,
+  Megaphone,
+  Zap,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -324,6 +326,43 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-blue-500">
                   <Mail className="h-5 w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Fase 6: CRM Campaigns & Automations */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <Link href="/admin/campaigns">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Campañas de leads</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Email & WhatsApp masivo</p>
+                  <p className="mt-2 text-sm font-medium text-primary">Crear campaña →</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-violet-500">
+                  <Megaphone className="h-5 w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/automations">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Automatizaciones</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Cumpleaños, leads fríos, reseñas</p>
+                  <p className="mt-2 text-sm font-medium text-primary">Ver flujos →</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-amber-500">
+                  <Zap className="h-5 w-5" />
                 </div>
               </div>
             </CardContent>

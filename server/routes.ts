@@ -3865,7 +3865,14 @@ export async function registerRoutes(
       
       const { auditService } = await import("./services/audit.service");
       await auditService.logLeadStatusChange(leadId, oldStatus, status, req.session?.userId);
-      
+
+      // Pipeline automation — fire and forget
+      if (status !== oldStatus && lead) {
+        const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+        const brandCode = req.brand?.code || "chroma";
+        leadCampaignService.triggerPipelineAutomation(leadId, status, brandCode).catch(() => {});
+      }
+
       res.json(lead);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -4405,6 +4412,113 @@ export async function registerRoutes(
       }
 
       return res.json({ mes, checkins: byDate, total: rows.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fase 6: Lead Campaigns ───────────────────────────────────────────────
+  app.get("/api/admin/lead-campaigns", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const brandId = req.brand?.id;
+      if (!brandId) return res.status(400).json({ error: "Brand not found" });
+      const list = await leadCampaignService.getLeadCampaigns(brandId);
+      return res.json(list);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/lead-campaigns", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const brandId = req.brand?.id;
+      if (!brandId) return res.status(400).json({ error: "Brand not found" });
+      const { name, channel, subject, body, leadStatuses } = req.body;
+      if (!name || !body) return res.status(400).json({ error: "name y body requeridos" });
+      const campaign = await leadCampaignService.createLeadCampaign({
+        brandId,
+        name,
+        channel: channel || "email",
+        subject,
+        body,
+        leadStatuses: leadStatuses || [],
+        createdBy: req.session?.userId,
+      });
+      return res.status(201).json(campaign);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/lead-campaigns/:id/send", requireAdminRole, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const result = await leadCampaignService.executeLeadCampaign(req.params.id);
+      return res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/lead-campaigns/:id/stats", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { leadCampaignService } = await import("./services/crm/lead-campaign.service");
+      const stats = await leadCampaignService.getCampaignStats(req.params.id);
+      return res.json(stats);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/lead-campaigns/generate-copy", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const { generateCampaignCopy } = await import("./services/ai/campaign-copy.service");
+      const { channel, topic, audienceSegment } = req.body;
+      if (!topic) return res.status(400).json({ error: "topic requerido" });
+      const brand = req.brand;
+      const copy = await generateCampaignCopy({
+        brandCode:       brand?.code || "chroma",
+        brandName:       brand?.name || "Chroma Travel",
+        channel:         channel || "email",
+        topic,
+        audienceSegment: audienceSegment || "leads interesados en viajes",
+      });
+      if (!copy) return res.status(500).json({ error: "No se pudo generar el copy" });
+      return res.json(copy);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Fase 6: Automations ───────────────────────────────────────────────────
+  app.post("/api/admin/automations/trigger", requireAdminRole, async (req, res) => {
+    try {
+      const { automationService } = await import("./services/crm/automation.service");
+      const brandId = req.brand?.id;
+      if (!brandId) return res.status(400).json({ error: "Brand not found" });
+      const results = await automationService.runAllAutomations(brandId);
+      return res.json(results);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/automations/status", requireAgentOrAdmin, async (req, res) => {
+    try {
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "DB no disponible" });
+
+      const flows = [
+        { key: "birthdays",  name: "Cumpleaños",       description: "Mensaje + 100 pts a clientes con cumpleaños hoy" },
+        { key: "coldLeads",  name: "Leads fríos",       description: "Follow-up a leads sin contacto > 3 días" },
+        { key: "winback",    name: "Recuperación",      description: "Reactivar clientes inactivos > 90 días" },
+        { key: "reminders",  name: "Recordatorios viaje", description: "Recuerda a clientes con check-in en 7 días" },
+        { key: "reviews",    name: "Reseñas",           description: "Pide reseña 3 días después del checkout" },
+      ];
+
+      return res.json({ flows });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
