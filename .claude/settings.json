@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/user/chromatravel.online/.claude/session-start.sh 2>/dev/null || true",
+            "timeout": 20,
+            "statusMessage": "Verificando salud del sistema..."
+          }
+        ]
+      }
+    ]
+  }
+}
