@@ -225,9 +225,11 @@ async function seedAdminUsers() {
     }
   ];
   
-  const adminPassword = process.env.ADMIN_PASSWORD ?? crypto.randomBytes(16).toString("hex");
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "Fenix2026!";
   if (!process.env.ADMIN_PASSWORD) {
-    console.warn("[seed-brands] ADMIN_PASSWORD not set — generated random password for admin accounts");
+    console.warn("[seed-brands] ADMIN_PASSWORD not set — using default password 'Fenix2026!'");
+  } else {
+    console.log("[seed-brands] Using ADMIN_PASSWORD from environment");
   }
   const hashedPassword = await hash(adminPassword, 10);
   

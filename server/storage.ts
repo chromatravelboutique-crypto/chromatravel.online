@@ -68,7 +68,7 @@ export interface IStorage {
   updateBooking(id: string, data: Partial<InsertBooking>): Promise<Booking | undefined>;
 
   // Leads
-  getLeads(): Promise<Lead[]>;
+  getLeads(opts?: { search?: string; status?: string; page?: number; limit?: number }): Promise<{ leads: Lead[]; total: number }>;
   getLead(id: string): Promise<Lead | undefined>;
   getLeadById(id: string): Promise<Lead | undefined>;
   createLead(lead: InsertLead): Promise<Lead>;
@@ -304,8 +304,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Leads
-  async getLeads(): Promise<Lead[]> {
-    return getDatabase().select().from(leads).orderBy(desc(leads.createdAt));
+  async getLeads(opts: { search?: string; status?: string; page?: number; limit?: number } = {}): Promise<{ leads: Lead[]; total: number }> {
+    const { search, status, page = 1, limit = 50 } = opts;
+    const offset = (page - 1) * limit;
+    const conditions: any[] = [];
+    if (search) {
+      const term = `%${search}%`;
+      conditions.push(or(ilike(leads.name, term), ilike(leads.email, term), ilike(leads.phone, term)));
+    }
+    if (status) {
+      conditions.push(eq(leads.status, status));
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const [rows, countRows] = await Promise.all([
+      where
+        ? getDatabase().select().from(leads).where(where).orderBy(desc(leads.createdAt)).limit(limit).offset(offset)
+        : getDatabase().select().from(leads).orderBy(desc(leads.createdAt)).limit(limit).offset(offset),
+      where
+        ? getDatabase().select({ count: sql<number>`count(*)::int` }).from(leads).where(where)
+        : getDatabase().select({ count: sql<number>`count(*)::int` }).from(leads),
+    ]);
+    return { leads: rows, total: countRows[0]?.count ?? 0 };
   }
 
   async getLead(id: string): Promise<Lead | undefined> {

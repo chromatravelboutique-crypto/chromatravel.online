@@ -1584,9 +1584,9 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid credentials" });
       }
       
-      // Verify user belongs to current brand (or is admin with null brandId)
+      // Verify user belongs to current brand (admins can login from any brand domain)
       const currentBrandId = req.brand?.id;
-      if (user.brandId && currentBrandId && user.brandId !== currentBrandId) {
+      if (user.role !== "admin" && user.brandId && currentBrandId && user.brandId !== currentBrandId) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
       
@@ -1624,6 +1624,21 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error logging out:", error);
       res.status(500).json({ message: "Error logging out" });
+    }
+  });
+
+  // Protected seed reset — use ?token=ADMIN_API_TOKEN or X-Admin-Token header
+  app.post("/api/auth/reset-admin-seed", async (req, res) => {
+    const expected = process.env.ADMIN_API_TOKEN;
+    if (!expected) return res.status(503).json({ error: "ADMIN_API_TOKEN not configured" });
+    const provided = (req.query.token as string) || req.headers["x-admin-token"];
+    if (provided !== expected) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { seedBrands } = await import("./seed-brands");
+      await seedBrands();
+      res.json({ ok: true, message: "Admin seed completed — passwords updated" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -1879,8 +1894,12 @@ export async function registerRoutes(
 
   app.get("/api/admin/leads", requireAgentOrAdmin, async (req, res) => {
     try {
-      const leads = await storage.getLeads();
-      res.json(leads);
+      const search = (req.query.search as string) || undefined;
+      const status = (req.query.status as string) || undefined;
+      const page   = parseInt((req.query.page as string) || "1", 10);
+      const limit  = Math.min(parseInt((req.query.limit as string) || "50", 10), 200);
+      const result = await storage.getLeads({ search, status, page, limit });
+      res.json(result);
     } catch (error) {
       console.error("Error fetching leads:", error);
       res.status(500).json({ message: "Error fetching leads" });
@@ -3881,8 +3900,8 @@ export async function registerRoutes(
 
   app.get("/api/admin/leads/kanban", requireAgentOrAdmin, async (req, res) => {
     try {
-      const allLeads = await storage.getLeads();
-      
+      const { leads: allLeads, total } = await storage.getLeads({ limit: 1000 });
+
       const kanbanData = {
         new: allLeads.filter(l => l.status === "new" || !l.status),
         contacted: allLeads.filter(l => l.status === "contacted"),
@@ -3892,18 +3911,18 @@ export async function registerRoutes(
         won: allLeads.filter(l => l.status === "won"),
         lost: allLeads.filter(l => l.status === "lost"),
       };
-      
+
       const metrics = {
-        total: allLeads.length,
+        total,
         byStatus: Object.entries(kanbanData).map(([status, leads]) => ({
           status,
           count: leads.length,
         })),
-        conversionRate: allLeads.length > 0 
-          ? ((kanbanData.won.length / allLeads.length) * 100).toFixed(1) + '%'
+        conversionRate: total > 0
+          ? ((kanbanData.won.length / total) * 100).toFixed(1) + '%'
           : '0%',
       };
-      
+
       res.json({ kanban: kanbanData, metrics });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
