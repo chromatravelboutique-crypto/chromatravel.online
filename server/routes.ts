@@ -172,10 +172,26 @@ export async function registerRoutes(
   
   app.get("/api/health", async (req, res) => {
     try {
-      res.status(200).json({ 
-        status: "ok", 
+      const dbUrl = process.env.DATABASE_URL || "";
+      let dbHost = "not set";
+      let dbProvider = "unknown";
+      let dbPing = false;
+      try {
+        const u = new URL(dbUrl);
+        dbHost = u.hostname;
+        dbProvider = u.hostname.includes("neon.tech") ? "NEON ⚠️" :
+                     u.hostname.includes("rlwy.net") || u.hostname.includes("railway") ? "Railway ✅" :
+                     u.hostname.includes("localhost") || u.hostname.includes("127.0.0.1") ? "local" : "other";
+      } catch {}
+      try {
+        const pool = getPool();
+        if (pool) { await pool.query("SELECT 1"); dbPing = true; }
+      } catch {}
+      res.status(200).json({
+        status: dbPing ? "ok" : "degraded",
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: Math.round(process.uptime()),
+        db: { host: dbHost, provider: dbProvider, connected: dbPing },
       });
     } catch (error) {
       res.status(500).json({ status: "error" });
