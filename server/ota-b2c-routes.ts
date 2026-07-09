@@ -875,16 +875,5 @@ export function registerOtaB2cRoutes(app: Express) {
     }
   });
 
-  // POST /api/admin/inventory/seed-fenix — manual trigger to re-run Fenix CSV seed
-  app.post("/api/admin/inventory/seed-fenix", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const { seedBloqueosFenix } = await import("./seed-bloqueos-fenix");
-      const result = await seedBloqueosFenix();
-      res.json({ success: true, ...result });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  console.log("[OTA B2C] Routes registered: upload-inventory, calculate-deposit, clip, share, agency, seed-fenix");
+  console.log("[OTA B2C] Routes registered: upload-inventory, calculate-deposit, clip, share, agency");
 }

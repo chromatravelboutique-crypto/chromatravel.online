@@ -18,7 +18,7 @@ import { createServer } from "http";
 import { brandMiddleware } from "./brand-middleware";
 import { seedBrands } from "./seed-brands";
 import { seedBloqueos } from "./seed-bloqueos";
-import { seedBloqueosFenix } from "./seed-bloqueos-fenix";
+
 import { pool } from "./db";
 
 const app = express();
@@ -68,13 +68,6 @@ export function log(message: string, source = "express") {
     console.error("Bloqueos seeding failed:", error);
   }
 
-  // Seed Fenix 2026 inventory (upsert — safe to run every startup)
-  try {
-    await seedBloqueosFenix();
-  } catch (error) {
-    console.error("Fenix bloqueos seeding failed:", error);
-  }
-  
   // Enable Gzip/Brotli compression for all responses
   app.use(compression());
 

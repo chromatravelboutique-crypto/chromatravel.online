@@ -177,7 +177,6 @@ Three providers available: Hotelbeds (primary, HMAC auth), TBO (`tbo-provider.ts
 ### Startup seeds (auto-run in `server/index.ts`)
 1. `seed-brands.ts` — upserts Chroma + Fénix brand rows + admin users (resets passwords)
 2. `seed-bloqueos.ts` — seeds 625 base inventory blocks if table is empty
-3. `seed-bloqueos-fenix.ts` — upserts 409 Fénix 2026 bloqueos from embedded CSV data
 
 ## Deployment (Railway)
 
