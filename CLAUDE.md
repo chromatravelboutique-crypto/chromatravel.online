@@ -167,17 +167,25 @@ Three providers available: Hotelbeds (primary, HMAC auth), TBO (`tbo-provider.ts
 ### Maintenance script
 `scripts/weekly-maintenance.mjs` — run manually on Mondays (the session-start hook reminds you). Checks domain health, monitors hot leads and low stock, generates and publishes weekly blog post (alternating brand each week by ISO week parity), and writes CSV reports to `/reports/`.
 
+### Admin users (`server/seed-brands.ts`)
+- Chroma admin: `contacto@chromatravel.online`
+- Fénix admin: `eric.cervantes@fenixtraveler.com`
+- Password: value of `ADMIN_PASSWORD` env var; falls back to `Fenix2026!` if unset. The seed runs on every startup and **always updates** the password — re-deploying effectively resets it to `ADMIN_PASSWORD`.
+- Admin role bypasses cross-brand login check — both accounts can log in from either domain.
+- Emergency re-seed without redeploy: `POST /api/auth/reset-admin-seed` with header `X-Admin-Token: <ADMIN_API_TOKEN>`.
+
 ### Startup seeds (auto-run in `server/index.ts`)
-1. `seed-brands.ts` — upserts Chroma + Fénix brand rows
+1. `seed-brands.ts` — upserts Chroma + Fénix brand rows + admin users (resets passwords)
 2. `seed-bloqueos.ts` — seeds 625 base inventory blocks if table is empty
 3. `seed-bloqueos-fenix.ts` — upserts 409 Fénix 2026 bloqueos from embedded CSV data
 
 ## Deployment (Railway)
 
 - **Build:** `npm ci --include=dev && npm run build` (nixpacks.toml)
-- **Start:** `npm run db:push && npm start` (railway.json)
-- **Node version:** 22.12.0 (`.nvmrc`)
+- **Start:** `npm run db:push && npm start` — `db:push` is in both `railway.json` and `package.json start` script; runs on every deploy to create missing tables.
+- **Node version:** 22.12.0 (`.nvmrc`); nixpacks.toml pins Node 20 — the `.nvmrc` value is for local dev only.
 - **Health check:** `GET /api/health`
+- **DATABASE_URL** must point to Railway's internal Postgres (`*.rlwy.net`), not Neon (`neon.tech`). If endpoints return `"endpoint has been disabled"`, the URL is pointing to a disabled Neon project — update it to the Railway Postgres connection string.
 - Required env vars: `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_PASSWORD`; see `RAILWAY.md` for full list including Clip, TBO, Hotelbeds, SMTP, Twilio, Anthropic.
 
 ## Git
