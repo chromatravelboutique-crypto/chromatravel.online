@@ -187,6 +187,14 @@ Three providers available: Hotelbeds (primary, HMAC auth), TBO (`tbo-provider.ts
 - **DATABASE_URL** must point to Railway's internal Postgres (`*.rlwy.net`), not Neon (`neon.tech`). If endpoints return `"endpoint has been disabled"`, the URL is pointing to a disabled Neon project — update it to the Railway Postgres connection string.
 - Required env vars: `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_PASSWORD`; see `RAILWAY.md` for full list including Clip, TBO, Hotelbeds, SMTP, Twilio, Anthropic.
 
+## gstack
+
+Installed at `~/.claude/skills/gstack` (v1.60.1.0). Use `/browse` from gstack for all web browsing — never use `mcp__claude-in-chrome__*` tools directly.
+
+Available skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`, `/document-generate`, `/codex`, `/cso`, `/autoplan`, `/pair-agent`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`.
+
+To upgrade: `/gstack-upgrade`
+
 ## Git
 
 Active development branch: `claude/setup-chromatravel-crypto-8Z524` → merges to `main`.  
